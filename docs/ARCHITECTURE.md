@@ -1221,7 +1221,7 @@ Because the catalog lives on the root cell:
 
 **Loading untrusted files.** [load](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L307) treats the JSON as untrusted (§16).
 - **Dropped:** invalid IDs (including `__proto__`, `constructor` and `prototype`), wrong types, dangling references and unknown action types.
-- **Repaired:** names are truncated, attribute lists are de-duplicated, and an invalid cardinality becomes `1:N`.
+- **Repaired:** names are truncated, attribute lists are de-duplicated, and an invalid cardinality becomes `1:M`. Cardinalities written with `N` before CHG-008 (`1:N`, `N:1`, `N:M`) load as `1:M`, `M:1`, `M:M` (`DataFlow.normalizeCardinality`).
 - **Action configurations** go through [sanitizeConfig](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L575).
 - **Reporting:** repairs are collected in `warnings` and logged once per stored text. Invalid JSON reads as an empty catalog.
 
@@ -1283,7 +1283,7 @@ The model view lives in the same page as the flow, in layers marked with `dfLaye
 | Layer | Contents |
 |---|---|
 | `flow` | The existing layer of the flow shapes. It is marked the first time the model view is shown and is otherwise unchanged. |
-| `model` ("Data Model") | One table per dataset (`dfType="table"`, a swimlane in the system's palette colour) with one row per attribute (`column`), plus relationship edges (`relationship`) between rows: ER markers per side of the cardinality (`1` → `ERmandOne`, `N`/`M` → `ERmany`), labelled with the cardinality and "· Addition" for Addition relationships. |
+| `model` ("Data Model") | One table per dataset (`dfType="table"`, a swimlane in the system's palette colour) with one row per attribute (`column`), plus relationship edges (`relationship`) between rows: ER markers per side of the cardinality (`1` → `ERmandOne`, `M` → `ERmany`), labelled with the cardinality and "· Addition" for Addition relationships. |
 | `lineage` | One dashed edge per pair of datasets (`lineage`, with `dfFrom`/`dfTo`), labelled with the number of copied attributes. Rows that are copies show a ↳ mark with the source in the tooltip. |
 
 - **Switching views.** [applyView](../src/main/webapp/js/diagramly/dataflow/DataFlowModel.js#L186) shows one layer and hides (and locks) the other. The lineage layer is shown only in the model view with *Show lineage* on. The view is stored on the page root (`dfView`, `dfLineage`), and switching is one undoable edit.

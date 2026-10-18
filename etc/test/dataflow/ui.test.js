@@ -368,7 +368,7 @@
 		DataFlowView.update(x.graph, function(c)
 		{
 			c.addRelationship(c.getDataset(x.dsId).attributes[2],
-				c.getDataset(DataFlowView.getId(assets)).attributes[0], 'N:1');
+				c.getDataset(DataFlowView.getId(assets)).attributes[0], 'M:1');
 		});
 
 		ui.dataFlow.editCell(x.ds);

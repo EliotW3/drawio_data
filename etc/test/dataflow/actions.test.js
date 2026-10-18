@@ -304,14 +304,14 @@
 		var maps = dlg.querySelectorAll('.geDataFlowMapRow');
 		t.eq(maps.length, 6, 'one row per incoming attribute');
 		maps[1].querySelectorAll('select')[0].value = attr(c, x.reg, 'Asset_No');
-		maps[1].querySelectorAll('select')[1].value = 'N:1';
+		maps[1].querySelectorAll('select')[1].value = 'M:1';
 		dlg.querySelector('.gePrimaryBtn').click();
 
 		c = x.catalog();
 		var rels = c.getRelationshipIds(null, DataFlowView.getId(add));
 		t.eq(rels.length, 1);
 		t.eq(c.getRelationship(rels[0]), {from: attr(c, x.wo, 'Asset_ID'), to: attr(c, x.reg, 'Asset_No'),
-			cardinality: 'N:1', source: 'addition', action: DataFlowView.getId(add)});
+			cardinality: 'M:1', source: 'addition', action: DataFlowView.getId(add)});
 
 		var stream = DataFlowStreams.getInputStream(x.graph, c, exp);
 		t.eq(stream.map(function(e) { return e.dataset; }), [x.wo, x.assets, x.reg], 'export sees the added dataset');

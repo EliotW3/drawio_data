@@ -34,7 +34,24 @@ DataFlow.ACTION_TYPES = [DataFlow.ACTION_EXPORT, DataFlow.ACTION_VALIDATION,
 /**
  * Relationship cardinalities and sources.
  */
-DataFlow.CARDINALITIES = ['1:1', '1:N', 'N:1', 'N:M'];
+DataFlow.CARDINALITIES = ['1:1', '1:M', 'M:1', 'M:M'];
+
+/**
+ * Cardinalities written before M replaced N for "many" (CHG-008), read as
+ * their current form.
+ */
+DataFlow.LEGACY_CARDINALITIES = {'1:N': '1:M', 'N:1': 'M:1', 'N:M': 'M:M'};
+
+/**
+ * Returns the current form of the given cardinality (legacy N becomes M),
+ * or the value unchanged if it is not a legacy form.
+ */
+DataFlow.normalizeCardinality = function(cardinality)
+{
+	return (typeof cardinality === 'string' &&
+		Object.prototype.hasOwnProperty.call(DataFlow.LEGACY_CARDINALITIES, cardinality)) ?
+		DataFlow.LEGACY_CARDINALITIES[cardinality] : cardinality;
+};
 
 DataFlow.RELATIONSHIP_MANUAL = 'manual';
 DataFlow.RELATIONSHIP_ADDITION = 'addition';

@@ -6,7 +6,7 @@ The upstream release log is [ChangeLog](../ChangeLog) in the repository root. Do
 
 ## How to record a change
 
-- Add a new entry at the **top** of [Change entries](#change-entries) with the next ID (`CHG-008`, `CHG-009`, …), and add a row to the [Change index](#change-index).
+- Add a new entry at the **top** of [Change entries](#change-entries) with the next ID (`CHG-009`, `CHG-010`, …), and add a row to the [Change index](#change-index).
 - Fill in every heading of the template below. Write "None" rather than deleting a heading.
 - Reference [ARCHITECTURE.md](ARCHITECTURE.md) sections by number (e.g. "§12.2") and update those sections in the same change, so that the architecture guide always describes the current code.
 - List anything left unfinished under **Follow-ups**, and keep [Open follow-ups](#open-follow-ups) in sync until the item is resolved.
@@ -35,6 +35,7 @@ The upstream release log is [ChangeLog](../ChangeLog) in the repository root. Do
 
 | ID | Date | Title | Status |
 |---|---|---|---|
+| [CHG-008](#chg-008--data-flow-cardinalities-use-m-for-many) | 2026-10-18 | Data flow cardinalities use M for "many" | Done |
 | [CHG-007](#chg-007--data-flow-diagrams-phase-5-copy-and-paste-performance) | 2026-10-18 | Data flow diagrams, phase 5: copy and paste, performance | Done |
 | [CHG-006](#chg-006--data-flow-diagrams-phase-4-model-view) | 2026-10-18 | Data flow diagrams, phase 4: model view | Done |
 | [CHG-005](#chg-005--data-flow-diagrams-phase-3-actions) | 2026-10-18 | Data flow diagrams, phase 3: actions | Done |
@@ -55,6 +56,43 @@ The upstream release log is [ChangeLog](../ChangeLog) in the repository root. Do
 ---
 
 ## Change entries
+
+### CHG-008 — Data flow cardinalities use M for "many"
+
+- **Date:** 2026-10-18
+- **Status:** Done
+- **ARCHITECTURE.md sections affected:** §20.2, §20.4
+
+**Motivation**
+
+The cardinalities mixed N and M for "many" (`1:N`, `N:1`, `N:M`). They now use M throughout: `1:1`, `1:M`, `M:1`, `M:M`.
+
+**What changed for users**
+
+The cardinality picker, relationship labels and the Addition dialog show `1:M (one to many)`, `M:1 (many to one)` and `M:M (many to many)`. Files saved with the old values open with the new ones. The markers are unchanged.
+
+**What changed in the code**
+
+| File | Change |
+|---|---|
+| `DataFlow.js` | `CARDINALITIES` is `['1:1', '1:M', 'M:1', 'M:M']`. New `LEGACY_CARDINALITIES` and `normalizeCardinality`. |
+| `DataFlowCatalog.js` | Load, `addRelationship` and `setCardinality` convert the old forms. The default for an invalid value is `1:M`. |
+| `DataFlowDialogs.js`, [resources/dia.txt](../src/main/webapp/resources/dia.txt) | Picker keys and default; strings `dfCard1M`, `dfCardM1`, `dfCardMM` replace `dfCard1N`, `dfCardN1`, `dfCardNM`. |
+| `etc/test/dataflow/*.test.js` | Values updated. One new test covers loading old files (91 in total). |
+| `js/app.min.js`, `js/viewer*.min.js` | Rebuilt. |
+
+**Impact on the codebase**
+
+- **Format.** Stored relationships are written with M from now on. Older builds of this fork would read `1:M` as invalid and reset it to `1:N`, so files edited here should not go back to a build from before this change.
+- **Older CHANGES entries** keep the N notation they were written with.
+
+**Verification**
+
+`ant` builds with 0 errors. `node run.js` passes **91/91** in dev mode and against the rebuilt bundles.
+
+**Follow-ups**
+
+None.
 
 ### CHG-007 — Data flow diagrams, phase 5: copy and paste, performance
 

@@ -1091,12 +1091,12 @@ DataFlowDialogs.showCardinalityDialog = function(ui, catalog, from, to, current,
 		'dfChangeCardinality' : 'dfAddRelationship'),
 		mxResources.get('dfRelationshipHint', [describe(from), describe(to)]));
 	var section = DataFlowDialogs.addSection(div);
-	var keys = {'1:1': 'dfCard11', '1:N': 'dfCard1N', 'N:1': 'dfCardN1', 'N:M': 'dfCardNM'};
+	var keys = {'1:1': 'dfCard11', '1:M': 'dfCard1M', 'M:1': 'dfCardM1', 'M:M': 'dfCardMM'};
 	var select = DataFlowDialogs.createSelect(DataFlow.CARDINALITIES.map(function(c)
 	{
 		return [c, mxResources.get(keys[c])];
 	}));
-	select.value = (current != null) ? current : '1:N';
+	select.value = (current != null) ? current : '1:M';
 	DataFlowDialogs.addRow(section, mxResources.get('dfCardinality'), select);
 
 	var dlg = DataFlowDialogs.show(ui, div, mxResources.get((current != null) ? 'apply' : 'add'), function()

@@ -61,8 +61,8 @@
 		x.connect(x.register, x.add, true);
 		c = x.catalog();
 		df.applyAddition(x.add, {dataset: x.reg, mappings: [{from: attr(c, x.copy, 'Asset_ID'),
-			to: attr(c, x.reg, 'Asset_No'), cardinality: 'N:1'}]});
-		x.manual = df.addRelationship(attr(c, x.wo, 'Asset_ID'), attr(c, x.assets, 'Asset_ID'), '1:N');
+			to: attr(c, x.reg, 'Asset_No'), cardinality: 'M:1'}]});
+		x.manual = df.addRelationship(attr(c, x.wo, 'Asset_ID'), attr(c, x.assets, 'Asset_ID'), '1:M');
 
 		x.tables = function()
 		{
@@ -129,13 +129,13 @@
 		var byId = {};
 		rels.forEach(function(e) { byId[DataFlowView.getId(e)] = e; });
 		var manual = byId[x.manual];
-		t.ok(manual.style.indexOf('startArrow=ERmandOne') >= 0 && manual.style.indexOf('endArrow=ERmany') >= 0, '1:N');
-		t.eq(manual.value.getAttribute('label'), '1:N');
+		t.ok(manual.style.indexOf('startArrow=ERmandOne') >= 0 && manual.style.indexOf('endArrow=ERmany') >= 0, '1:M');
+		t.eq(manual.value.getAttribute('label'), '1:M');
 		t.eq(DataFlowView.getId(x.graph.model.getTerminal(manual, true)), attr(c, x.wo, 'Asset_ID'), 'row to row');
 
 		var added = byId[c.getRelationshipIds(null, DataFlowView.getId(x.add))[0]];
-		t.ok(added.style.indexOf('startArrow=ERmany') >= 0 && added.style.indexOf('endArrow=ERmandOne') >= 0, 'N:1');
-		t.eq(added.value.getAttribute('label'), 'N:1 · Addition');
+		t.ok(added.style.indexOf('startArrow=ERmany') >= 0 && added.style.indexOf('endArrow=ERmandOne') >= 0, 'M:1');
+		t.eq(added.value.getAttribute('label'), 'M:1 · Addition');
 
 		var lineage = DataFlowView.getCells(x.graph, 'lineage');
 		t.eq(lineage.length, 1, 'one edge for the dataset pair');
@@ -238,7 +238,7 @@
 			var dlg = ui.dialog.container;
 			t.eq(dlg.querySelector('h3').textContent, 'Add Relationship');
 			t.ok(dlg.textContent.indexOf('From Assets.Plant to Register.Asset_No') >= 0);
-			dlg.querySelector('select').value = 'N:M';
+			dlg.querySelector('select').value = 'M:M';
 			dlg.querySelector('.gePrimaryBtn').click();
 
 			var c = x.catalog();
@@ -262,7 +262,7 @@
 		x.graph.dblClick(new MouseEvent('dblclick'), rel);
 		var dlg = ui.dialog.container;
 		t.eq(dlg.querySelector('h3').textContent, 'Change Cardinality');
-		t.eq(dlg.querySelector('select').value, '1:N');
+		t.eq(dlg.querySelector('select').value, '1:M');
 		dlg.querySelector('select').value = '1:1';
 		dlg.querySelector('.gePrimaryBtn').click();
 

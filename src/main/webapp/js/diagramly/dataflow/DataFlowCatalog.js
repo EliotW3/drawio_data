@@ -513,12 +513,12 @@ DataFlowCatalog.prototype.load = function(data)
 		}
 		else
 		{
-			var cardinality = r.cardinality;
+			var cardinality = DataFlow.normalizeCardinality(r.cardinality);
 
 			if (mxUtils.indexOf(DataFlow.CARDINALITIES, cardinality) < 0)
 			{
-				self.warn('relationship', id, 'invalid cardinality, set to 1:N');
-				cardinality = '1:N';
+				self.warn('relationship', id, 'invalid cardinality, set to 1:M');
+				cardinality = '1:M';
 			}
 
 			var rel = {from: r.from, to: r.to, cardinality: cardinality,
@@ -1237,6 +1237,7 @@ DataFlowCatalog.prototype.removeAttribute = function(id, report)
  */
 DataFlowCatalog.prototype.addRelationship = function(from, to, cardinality, actionId)
 {
+	cardinality = DataFlow.normalizeCardinality(cardinality);
 	this.require(this.attributes, from, 'attribute');
 	this.require(this.attributes, to, 'attribute');
 
@@ -1276,6 +1277,7 @@ DataFlowCatalog.prototype.addRelationship = function(from, to, cardinality, acti
 DataFlowCatalog.prototype.setCardinality = function(id, cardinality)
 {
 	var rel = this.require(this.relationships, id, 'relationship');
+	cardinality = DataFlow.normalizeCardinality(cardinality);
 
 	if (mxUtils.indexOf(DataFlow.CARDINALITIES, cardinality) < 0)
 	{

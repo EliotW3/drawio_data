@@ -61,7 +61,7 @@
 		var x = sample();
 		var c = x.c;
 		var ids = c.getDataset(x.wo).attributes.slice();
-		var rel = c.addRelationship(ids[1], c.getDataset(x.as).attributes[0], '1:N');
+		var rel = c.addRelationship(ids[1], c.getDataset(x.as).attributes[0], '1:M');
 
 		var result = c.setDatasetAttributes(x.wo, [{id: ids[2], name: 'Plant code'},
 			{id: null, name: 'Priority'}, {id: ids[0], name: 'WO_ID'}]);
@@ -100,7 +100,7 @@
 		var val = c.addAction(DataFlow.ACTION_VALIDATION, {pairs: [{primary: x.wo, reference: x.as,
 			attributes: [[woId, assetId]]}]});
 		var filter = c.addAction(DataFlow.ACTION_FILTER, {dropped: {attributes: [woId]}});
-		var rel = c.addRelationship(woId, assetId, 'N:1');
+		var rel = c.addRelationship(woId, assetId, 'M:1');
 
 		var report = c.removeAttribute(woId);
 
@@ -171,10 +171,10 @@
 		t.throws(function() { c.addRelationship(a, b, '2:3'); }, 'cardinality');
 		t.throws(function() { c.addRelationship(a, b, '1:1', c.addAction(DataFlow.ACTION_EXPORT)); }, 'not an addition');
 
-		var r = c.addRelationship(a, b, 'N:1');
-		t.eq(c.getRelationship(r), {from: a, to: b, cardinality: 'N:1', source: 'manual'});
-		c.setCardinality(r, 'N:M');
-		t.eq(c.getRelationship(r).cardinality, 'N:M');
+		var r = c.addRelationship(a, b, 'M:1');
+		t.eq(c.getRelationship(r), {from: a, to: b, cardinality: 'M:1', source: 'manual'});
+		c.setCardinality(r, 'M:M');
+		t.eq(c.getRelationship(r).cardinality, 'M:M');
 		t.eq(c.getRelationshipIds(b), [r]);
 	});
 
@@ -183,7 +183,7 @@
 		var x = sample();
 		var c = x.c;
 		var add = c.addAction(DataFlow.ACTION_ADDITION, {dataset: x.as});
-		var r = c.addRelationship(c.getDataset(x.wo).attributes[2], c.getDataset(x.as).attributes[1], '1:N', add);
+		var r = c.addRelationship(c.getDataset(x.wo).attributes[2], c.getDataset(x.as).attributes[1], '1:M', add);
 		var exp = c.addAction(DataFlow.ACTION_EXPORT);
 		var out = c.addDataset(x.s, 'Out', ['WO_ID'], exp);
 		c.setDerivedFrom(c.getDataset(out).attributes[0], c.getDataset(x.wo).attributes[0]);
@@ -206,7 +206,7 @@
 		var x = sample();
 		var c = x.c;
 		var add = c.addAction(DataFlow.ACTION_ADDITION, {dataset: x.as});
-		var r = c.addRelationship(c.getDataset(x.wo).attributes[2], c.getDataset(x.as).attributes[1], '1:N', add);
+		var r = c.addRelationship(c.getDataset(x.wo).attributes[2], c.getDataset(x.as).attributes[1], '1:M', add);
 
 		t.eq(c.removeRelationship(r).flagged, [add]);
 		t.eq(c.getAction(add).attention, [{code: 'relationshipRemoved', id: r}]);
@@ -259,7 +259,7 @@
 		var x = sample();
 		var c = x.c;
 		var add = c.addAction(DataFlow.ACTION_ADDITION, {dataset: x.as});
-		c.addRelationship(c.getDataset(x.wo).attributes[2], c.getDataset(x.as).attributes[1], '1:N', add);
+		c.addRelationship(c.getDataset(x.wo).attributes[2], c.getDataset(x.as).attributes[1], '1:M', add);
 		var f = c.addAction(DataFlow.ACTION_FILTER);
 		var copy = c.addDataset(x.s, 'Copy', ['WO_ID'], f);
 		c.setActionConfig(f, {copies: (function() { var m = {}; m[x.wo] = copy; return m; })()});
@@ -314,7 +314,7 @@
 		t.eq(c.getActionIds(), ['x1']);
 		t.eq(c.getAction('x1').attention, [{code: 'x', id: 'a1'}]);
 		t.eq(Object.keys(c.relationships), ['r1']);
-		t.eq(c.getRelationship('r1').cardinality, '1:N');
+		t.eq(c.getRelationship('r1').cardinality, '1:M');
 		t.ok(c.warnings.length >= 10, 'warnings: ' + c.warnings.length);
 	});
 
@@ -341,5 +341,19 @@
 		t.eq(c.getSystem('s1').name, 'SAP');
 		t.ok(c.warnings[0].indexOf('newer') > 0);
 		t.ok(c.getSystem('s1').future === undefined);
+	});
+	test('catalog: cardinalities written with N load as M', function(t)
+	{
+		var c = new DataFlowCatalog({
+			systems: {s1: {name: 'S'}},
+			datasets: {d1: {name: 'D', system: 's1', attributes: ['a1', 'a2']}},
+			attributes: {a1: {name: 'A', dataset: 'd1'}, a2: {name: 'B', dataset: 'd1'}},
+			relationships: {r1: {from: 'a1', to: 'a2', cardinality: '1:N'},
+				r2: {from: 'a2', to: 'a1', cardinality: 'N:1'}, r3: {from: 'a1', to: 'a2', cardinality: 'N:M'}}});
+
+		t.eq(['r1', 'r2', 'r3'].map(function(id) { return c.getRelationship(id).cardinality; }), ['1:M', 'M:1', 'M:M']);
+		t.eq(c.warnings, [], 'converted silently');
+		t.eq(c.getRelationship(c.addRelationship('a1', 'a2', 'N:1')).cardinality, 'M:1', 'API accepts the old form');
+		t.eq(DataFlow.normalizeCardinality('__proto__'), '__proto__', 'only known forms are mapped');
 	});
 })();

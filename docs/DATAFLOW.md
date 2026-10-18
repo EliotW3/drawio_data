@@ -79,7 +79,7 @@ All IDs are generated (`Editor.guid()`) and never shown to the user. Names do no
     "a20": { "name": "WO_ID",     "dataset": "d9", "derivedFrom": "a1" }   // lineage (D12)
   },
   "relationships": {
-    "r1": { "from": "a1", "to": "a40", "cardinality": "1:N",           // 1:1 | 1:N | N:1 | N:M
+    "r1": { "from": "a1", "to": "a40", "cardinality": "1:M",           // 1:1 | 1:M | M:1 | M:M (M = many)
             "source": "addition", "action": "x3" }                     // or "source": "manual"
   },
   "actions": {
@@ -219,8 +219,9 @@ Suppose an Export's source dataset loses an attribute, or the connection feeding
 - **Tables:** one table per dataset in the catalog (D13). The header shows the dataset name with the system in small type, and is coloured per system (decision F: a palette of six, by the order systems were added). Each attribute is a row; rows that are the target of lineage show a small "derived" glyph (↳), with the source in the tooltip.
 - **Relationship edges** run row-to-row with ER (crow's-foot) markers for cardinality:
   - 1:1 → `ERmandOne`/`ERmandOne`
-  - 1:N → `ERmandOne`/`ERmany`
-  - N:M → `ERmany`/`ERmany`
+  - 1:M → `ERmandOne`/`ERmany`
+  - M:M → `ERmany`/`ERmany`
+  - *M* means "many". Until CHG-008 it was written *N* (`1:N`, `N:1`, `N:M`). Older files are converted when they load.
   - Edges created by an Addition are labelled with the action. Manual ones are not.
 - **Lineage edges** are dashed and grey, with a *Show lineage* check box on the control (default on). Decision E: **one edge per pair of datasets**, labelled with the number of attributes copied ("3 attributes"), not one edge per attribute.
 - **Positions:**
