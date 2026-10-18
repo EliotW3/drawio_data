@@ -1,0 +1,56 @@
+{
+  "appId": "io.github.eliotw3.drawiodata",
+  "productName": "drawio-data",
+  "copyright": "Copyright 2017-2026 draw.io Ltd, data flow additions 2026 drawio_data contributors",
+  "asar": true,
+  "files": [
+    "**/*",
+    "!src/test{,/**}",
+    "!scripts{,/**}",
+    "!dist{,/**}",
+    "!**/WEB-INF{,/**}",
+    "!drawio/src/main/webapp/stencils/**/*.xml",
+    "!drawio/src/main/webapp/shapes{,/**}",
+    "!drawio/src/main/webapp/js/diagramly{,/**}",
+    "drawio/src/main/webapp/js/diagramly/{ElectronApp,DesktopLibrary}.js",
+    "!drawio/src/main/webapp/js/grapheditor{,/**}",
+    "!drawio/src/main/webapp/mxgraph/src{,/**}",
+    "!drawio/src/main/webapp/mxgraph/mxClient.js",
+    "!node_modules/@cantoo/pdf-lib/{cjs,dist,src,ts3.4}{,/**}",
+    "!**/*.map"
+  ],
+  "directories": {
+    "output": "./dist/"
+  },
+  "npmRebuild": false,
+  "publish": null,
+  "win": {
+    "icon": "build/icon.ico",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ]
+  },
+  "nsis": {
+    "artifactName": "${productName}-${version}-windows-installer.${ext}",
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "runAfterFinish": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "drawio-data"
+  },
+  "afterPack": "build/fuses.mjs",
+  "fileAssociations": [
+    {
+      "ext": "drawio",
+      "name": "draw.io Diagram",
+      "description": "draw.io Diagram",
+      "mimeType": "application/vnd.jgraph.mxfile",
+      "role": "Editor"
+    }
+  ]
+}

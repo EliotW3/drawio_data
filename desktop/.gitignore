@@ -1,0 +1,4 @@
+node_modules/
+dist/
+# Copied from ../src/main/webapp by scripts/prepare.cjs
+drawio/

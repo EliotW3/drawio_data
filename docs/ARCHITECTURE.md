@@ -1,6 +1,6 @@
 # draw.io (`drawio_data`) — Architecture and Code Guide
 
-> A reference to how this fork of draw.io works, organised so that each subsystem has a stable section number to cite in discussions and change requests (e.g. "see §7.1 file format"). Code locations are given as repository-relative links. The document was written against upstream **version 32.5.5** (see [VERSION](../VERSION)). Line numbers were last updated with CHG-007 and will drift as the code changes. Function names are the reliable anchors.
+> A reference to how this fork of draw.io works, organised so that each subsystem has a stable section number to cite in discussions and change requests (e.g. "see §7.1 file format"). Code locations are given as repository-relative links. The document was written against upstream **version 32.5.5** (see [VERSION](../VERSION)). Line numbers were last updated with CHG-009 and will drift as the code changes. Function names are the reliable anchors.
 >
 > **Fork changes** are recorded in [CHANGES.md](CHANGES.md) (one `CHG-NNN` entry per change, with its impact). When a change alters behaviour described here, the relevant section is updated in the same change and notes the entry ID.
 
@@ -26,6 +26,7 @@
 18. [How-to Guide for Common Changes](#18-how-to-guide-for-common-changes)
 19. [Glossary](#19-glossary)
 20. [Data Flow Diagrams (fork feature)](#20-data-flow-diagrams-fork-feature)
+21. [Desktop App (Windows)](#21-desktop-app-windows)
 
 ---
 
@@ -97,6 +98,7 @@ drawio_data/
 │   ├── DATAFLOW.md              design spec of the data flow diagrams                   §20
 │   ├── code-review.md           review checklist
 │   └── dialog-style-guide.md    rules for building dialogs (§17.6)
+├── desktop/                     Windows desktop app (Electron, GPL-3.0)                  §21
 ├── etc/
 │   ├── build/                   build.xml, build.properties, compiler.jar (Closure)      §3
 │   ├── integrate/Integrate.js   bootstrap appended to integrate.min.js                   §3.3
@@ -1363,3 +1365,28 @@ node run.js http://127.0.0.1:8080/           # built bundles
 - [model.test.js](../etc/test/dataflow/model.test.js) covers the layers and switching (with undo), tables and colours, columns with lineage marks, relationship markers and labels, lineage per dataset, *Show lineage*, the first layout, kept positions and placement, rows kept through edits, drawing and changing relationships, deleting edges and tables, drop rules, the view switch and save/load.
 - [actions.test.js](../etc/test/dataflow/actions.test.js) covers the action palette and states, every connection rule, edge roles and styles, the four actions through their apply functions and dialogs, lineage, highlighting and focus, needs-attention, the delete confirmation, copying and deleting actions, rewiring, auto-opening and save/load.
 - [ui.test.js](../etc/test/dataflow/ui.test.js) covers the palette, placement, label escaping, folding and layout, edits shown on every shape, deletion, drop rules, double-click, both dialogs (including pasting attributes and validation) and the context menu.
+
+---
+
+## 21. Desktop App (Windows)
+
+[desktop/](../desktop/) packages the web app as a Windows application with Electron (CHG-009). It is draw.io desktop v32.5.5 (GPL-3.0, [desktop/LICENSE](../desktop/LICENSE)) adapted to this repository. [desktop/README.md](../desktop/README.md) covers installing, building and the full list of changes from upstream.
+
+### 21.1 How it fits together
+
+| Part | Role |
+|---|---|
+| [src/main/electron.js](../desktop/src/main/electron.js) | Electron main process (upstream). It creates the window, loads `drawio/src/main/webapp/index.html` from disk, and serves the IPC requests of the web app's desktop mode: open/save dialogs, recent files, file watching, backups, PDF and image export through `export3.html`. |
+| [src/main/electron-preload.js](../desktop/src/main/electron-preload.js) | Exposes `window.electron.request(…)` to the page. The web app side is [js/diagramly/ElectronApp.js](../src/main/webapp/js/diagramly/ElectronApp.js), active when `mxIsElectron` is true. |
+| [scripts/prepare.cjs](../desktop/scripts/prepare.cjs) | Copies `../src/main/webapp` to `desktop/drawio/src/main/webapp` (ignored by git), sets the version from `../VERSION`, and writes `src/main/disableUpdate.js` to keep updates off. It runs before `npm start` and `npm run dist-win`. |
+| [electron-builder-win.json](../desktop/electron-builder-win.json) | Per-user NSIS installer, x64, unsigned. App ID `io.github.eliotw3.drawiodata`, product name `drawio-data`, `.drawio` file association. The packaged `app.asar` leaves out the editor sources (`js/diagramly`, `js/grapheditor`, `mxgraph/src`), tests and `WEB-INF`, because the app runs `js/app.min.js`. |
+| [build/fuses.mjs](../desktop/build/fuses.mjs) | Flips Electron's security fuses after packing (upstream). |
+| [.github/workflows/desktop-windows.yml](../.github/workflows/desktop-windows.yml) | Builds on `windows-latest` (`npm ci`, `npm test`, `npm run dist-win`). It uploads the installer as an artifact, and for a `desktop-v*` tag publishes a GitHub Release with it. |
+
+### 21.2 Things to know when changing the web app
+
+- **Rebuild first.** The desktop app runs the **bundles**, so rebuild them (`cd etc/build && ant`) before building the desktop app; `prepare.cjs` stops if `js/app.min.js` is missing.
+- **Desktop detection.** The web app detects the desktop app in [bootstrap.js](../src/main/webapp/js/bootstrap.js) by ` electron/` and ` draw.io/` in the user agent. The app's name is `drawio-data`, so `electron.js` adds the ` draw.io/<version>` token to `app.userAgentFallback`. Without it the web app would run in browser mode inside the window.
+- **Updates.** `electron-updater` is still a dependency of the upstream main process, but updates are switched off by `disableUpdate.js`. Turning them on would install upstream draw.io over this fork.
+- **Startup parameters.** URL parameters come from `getUrlParams` in `electron.js`: device storage only, no cloud services, no export service.
+- **Running Electron from tools.** A shell that has `ELECTRON_RUN_AS_NODE=1` set (for example inside VS Code's extension host) starts the Electron binary as plain Node.js. Unset it before `npm start`.

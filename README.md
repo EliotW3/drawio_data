@@ -1,4 +1,31 @@
-# draw.io
+# drawio_data
+
+A fork of [draw.io](https://github.com/jgraph/drawio) with **data flow diagrams**: systems, datasets and their attributes, actions that move data between them (Export, Filter, Validation, Addition), and a model view of how the datasets relate. The design is in [docs/DATAFLOW.md](docs/DATAFLOW.md). How the code works is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and every change from upstream is in [docs/CHANGES.md](docs/CHANGES.md).
+
+## Use it
+
+**Windows app.** Download the installer from this repository's **Releases** page and run it. See [desktop/README.md](desktop/README.md) for details, including the SmartScreen warning for the unsigned installer.
+
+**In a browser, from a clone.** No build step is needed; any static web server works:
+
+```sh
+git clone https://github.com/EliotW3/drawio_data.git
+cd drawio_data
+python3 -m http.server 8080 --bind 127.0.0.1 --directory src/main/webapp
+```
+
+Then open http://127.0.0.1:8080/. Opening `index.html` directly from disk doesn't work. Diagrams are saved to your computer or the browser. The cloud storage options (Google Drive, OneDrive, GitHub, …) need sign-in credentials that this repository doesn't include.
+
+**Developing.**
+- Use `?dev=1` to run the source files instead of the bundles.
+- Rebuild the bundles with `cd etc/build && ant`. This needs a JDK and Apache Ant.
+- Run the data flow tests in `etc/test/dataflow` with `npm install` and then `node run.js`. This needs Firefox.
+
+The rest of this README is upstream draw.io's.
+
+---
+
+# draw.io (upstream)
 
 ## About
 
