@@ -75,7 +75,7 @@ The front end is a stack of four layers. Each upper layer **patches the prototyp
 - **All export is client-side.** VSDX export and server-side (export-service) export have been removed from this fork (CHG-001, [CHANGES.md](CHANGES.md)). PDF uses the browser print dialog.
 - **The UI is English only.** All translations and the language picker have been removed; `resources/dia.txt` is the single string bundle (CHG-002, [§13.3](#133-ui-text-resources)).
 - The stencil XML sources, the collaboration relay and cache servers, `OrgSettings.js` and the Atlassian/monday plugins are **not in this repository**.
-- The committed `js/*.min.js` bundles currently predate CHG-001 and CHG-002. Normal mode runs them until they are rebuilt, while `?dev=1` runs the current sources ([CHANGES.md › Open follow-ups](CHANGES.md#open-follow-ups)).
+- The committed `js/*.min.js` bundles were rebuilt after CHG-001 and CHG-002, so normal mode and `?dev=1` run the same code. Rebuild them (`cd etc/build && ant`, [§3](#3-build-system-and-release-artefacts)) whenever you change a source file.
 - Upstream does not accept pull requests (README). This fork is the place to make changes.
 
 ---
@@ -153,7 +153,7 @@ javac.dir=${war.dir}/WEB-INF/classes
 war.name=draw.war
 ```
 
-There is **no npm/webpack build** for the application. Every source file is plain ES5-style JavaScript using global constructors and `prototype` assignment, and the minified bundles are concatenations of Closure-compiled sources plus pre-minified vendor libraries. The compiled bundles are **committed to the repository** (`js/app.min.js`, `js/viewer.min.js`, …). If you edit a source file and run in production mode without rebuilding, your change will not be visible. Use `?dev=1` (see [§4.3](#43-development-mode-dev1)) while developing.
+There is **no npm/webpack build** for the application. Every source file is plain ES5-style JavaScript using global constructors and `prototype` assignment, and the minified bundles are concatenations of Closure-compiled sources plus pre-minified vendor libraries. The compiled bundles are **committed to the repository** (`js/app.min.js`, `js/viewer.min.js`, …). If you edit a source file and run in production mode without rebuilding, your change will not be visible. Use `?dev=1` (see [§4.3](#43-development-mode-dev1)) while developing, and rebuild before committing. On the development machine a per-user JDK 21 and Ant 1.10.14 are installed in `~/.local/opt`: `export JAVA_HOME=~/.local/opt/jdk-21.0.12.1+1 PATH=$JAVA_HOME/bin:~/.local/opt/apache-ant-1.10.14/bin:$PATH`, then `cd etc/build && ant` (about 35 s).
 
 CI ([.github/workflows/war.yml](../.github/workflows/war.yml), and the legacy [.travis.yml](../.travis.yml)) runs `ant war` on JDK 8 when a `v*` tag is pushed and attaches `build/draw.war` to a GitHub release. [.github/workflows/stale.yml](../.github/workflows/stale.yml) is an issue-housekeeping bot.
 
@@ -241,7 +241,7 @@ To run the app from source, serve `src/main/webapp` over HTTP and open `index.ht
 
 Configuration is layered through **global `window.*` variables**. Most files set a value only if it is still unset (`window.X = window.X || default`), so the earliest assignment usually wins. `PostConfig.js` is the exception:
 
-1. [js/PreConfig.js](../src/main/webapp/js/PreConfig.js) is the **deployment hook**. It is loaded on every host except `*.draw.io`/`*.diagrams.net` and in Electron, so it always applies to a self-hosted copy. It sets `DRAWIO_PUBLIC_BUILD = true`, a TEMPORARY `EXPORT_URL = null` guard that only exists for the stale prebuilt bundles and will be removed after the rebuild (CHG-001), `DRAWIO_BASE_URL`, `DRAWIO_VIEWER_URL`, `DRAWIO_LIGHTBOX_URL`, `DRAW_MATH_URL = 'math4/es5'`, `DRAWIO_CONFIG = null` (a global JSON configuration, see [§7.2](#72-editorconfigure-and-the-configuration-object)), and forces `urlParams['sync'] = 'manual'`. **This is the file to edit for a self-hosted deployment.**
+1. [js/PreConfig.js](../src/main/webapp/js/PreConfig.js) is the **deployment hook**. It is loaded on every host except `*.draw.io`/`*.diagrams.net` and in Electron, so it always applies to a self-hosted copy. It sets `DRAWIO_PUBLIC_BUILD = true`, `DRAWIO_BASE_URL`, `DRAWIO_VIEWER_URL`, `DRAWIO_LIGHTBOX_URL`, `DRAW_MATH_URL = 'math4/es5'`, `DRAWIO_CONFIG = null` (a global JSON configuration, see [§7.2](#72-editorconfigure-and-the-configuration-object)), and forces `urlParams['sync'] = 'manual'`. **This is the file to edit for a self-hosted deployment.**
 2. [js/diagramly/Init.js](../src/main/webapp/js/diagramly/Init.js) sets the URLs (`DRAWIO_SERVER_URL`, `PROXY_URL`, `SAVE_URL`, `REALTIME_URL`, `RT_WEBSOCKET_URL`, `NOTIFICATIONS_URL`, `ICONSEARCH_PATH`, `ICON_SERVICE_PATH`, `TEMPLATE_PATH`, `SHAPES_PATH`, `RESOURCES_PATH`, GitHub/GitLab client IDs) and `ALLOW_CUSTOM_PLUGINS`. The UI is English only ([CHG-002](CHANGES.md#chg-002--english-only-user-interface)): it sets `mxLanguage = 'en'` and `mxLanguages = []`, so `?lang`, stored settings and the browser language are ignored. It also resolves `uiTheme` (`?ui` or the stored setting) and normalises the parameter combinations:
    - `lightbox=1` ⇒ `chrome=0`
    - `embedInline=1` ⇒ `embed=1, ui=sketch, plugins=0, proto=json`
