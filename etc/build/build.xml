@@ -620,6 +620,12 @@ OUTPUT FILES (in src/main/webapp/js/):
 				<file name="P2PCollab.js" />
 				<file name="Simple.js" />
 			</sources>
+
+			<!-- Data flow diagrams (docs/DATAFLOW.md) -->
+			<sources dir="${war.dir}/js/diagramly/dataflow">
+				<file name="DataFlow.js" />
+				<file name="DataFlowCatalog.js" />
+			</sources>
 		</jscomp>
 
 		<!-- Build final app.min.js -->

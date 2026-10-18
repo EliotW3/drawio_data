@@ -1,6 +1,6 @@
 # draw.io (`drawio_data`) — Architecture and Code Guide
 
-> A reference to how this fork of draw.io works, organised so that each subsystem has a stable section number to cite in discussions and change requests (e.g. "see §7.1 file format"). Code locations are given as repository-relative links. The document was written against upstream **version 32.5.5** (see [VERSION](../VERSION)). Line numbers were last updated with CHG-002 and will drift as the code changes. Function names are the reliable anchors.
+> A reference to how this fork of draw.io works, organised so that each subsystem has a stable section number to cite in discussions and change requests (e.g. "see §7.1 file format"). Code locations are given as repository-relative links. The document was written against upstream **version 32.5.5** (see [VERSION](../VERSION)). Line numbers were last updated with CHG-003 and will drift as the code changes. Function names are the reliable anchors.
 >
 > **Fork changes** are recorded in [CHANGES.md](CHANGES.md) (one `CHG-NNN` entry per change, with its impact). When a change alters behaviour described here, the relevant section is updated in the same change and notes the entry ID.
 
@@ -25,6 +25,7 @@
 17. [Cross-cutting Conventions](#17-cross-cutting-conventions)
 18. [How-to Guide for Common Changes](#18-how-to-guide-for-common-changes)
 19. [Glossary](#19-glossary)
+20. [Data Flow Diagrams (fork feature, in progress)](#20-data-flow-diagrams-fork-feature-in-progress)
 
 ---
 
@@ -93,13 +94,15 @@ drawio_data/
 ├── docs/
 │   ├── ARCHITECTURE.md          ← this document
 │   ├── CHANGES.md               log of every change made in this fork (CHG-NNN)
+│   ├── DATAFLOW.md              design spec of the data flow diagrams                   §20
 │   ├── code-review.md           review checklist
 │   └── dialog-style-guide.md    rules for building dialogs (§17.6)
 ├── etc/
 │   ├── build/                   build.xml, build.properties, compiler.jar (Closure)      §3
 │   ├── integrate/Integrate.js   bootstrap appended to integrate.min.js                   §3.3
 │   ├── dependencies/            vendored-library manifest + DOMPurify smoke test        §3.3
-│   └── imageResize/             Node CLI to shrink embedded images in .drawio files      §3.3
+│   ├── imageResize/             Node CLI to shrink embedded images in .drawio files      §3.3
+│   └── test/dataflow/           headless browser tests of the data flow diagrams        §20.3
 └── src/main/
     ├── server/java/com/mxgraph/online/   Java servlets (OAuth, proxy, embed, log)          §15
     └── webapp/                            the deployable web root (= the WAR contents)
@@ -111,6 +114,7 @@ drawio_data/
         │   ├── bootstrap.js, main.js, PreConfig.js, PostConfig.js                          §4
         │   ├── grapheditor/   generic editor layer (Editor, EditorUi, Graph, Format, …)    §6
         │   ├── diagramly/     application layer (App, files, sync, dialogs, menus, …)      §7–§12
+        │   │   ├── dataflow/  data flow diagrams (fork feature)                            §20
         │   │   ├── sidebar/   68 shape-library definitions + sidebar extensions            §8.4
         │   │   ├── vsdx/ emf/ graphml/ miro/   importers                                    §12.1
         │   │   ├── gif/       animated GIF/MP4 export                                      §12.2
@@ -1163,3 +1167,71 @@ New dialogs should use `CustomDialog` and `ui.showDialog(dlg.container, width, n
 | **Locked group / transparentBounds** | Group behaviours: children not individually selectable; bounds derived from the children |
 | **Hover icons** | The blue arrows around a hovered shape for quick connect and clone (`HoverIcons`) |
 | **Shape picker** | The popup of shapes shown when dropping an edge on empty space or double-clicking the background |
+
+---
+
+## 20. Data Flow Diagrams (fork feature, in progress)
+
+A fork-only feature for visualising data flow between systems. The agreed design is in [DATAFLOW.md](DATAFLOW.md), and progress is tracked as one CHG entry per phase in [CHANGES.md](CHANGES.md). This section describes what is implemented.
+
+| Phase | State |
+|---|---|
+| 1. Catalog (storage, integrity rules, undo) | **Done** (CHG-003) |
+| 2. Systems & datasets | Not started |
+| 3. Actions | Not started |
+| 4. Model view | Not started |
+| 5. Hardening | Not started |
+
+### 20.1 Files and loading
+
+The sources are in [js/diagramly/dataflow/](../src/main/webapp/js/diagramly/dataflow/). They are loaded after the diagramly core: by [Devel.js](../src/main/webapp/js/diagramly/Devel.js) in dev mode, and compiled into `app.min.js` by the Step 9 source list in [etc/build/build.xml](../etc/build/build.xml). They are not part of the viewer bundles, which only need the materialised cells (DATAFLOW.md §5.1).
+
+| File | Contents |
+|---|---|
+| [DataFlow.js](../src/main/webapp/js/diagramly/dataflow/DataFlow.js) | `DataFlow` namespace: the catalog attribute name and version, action types, cardinalities, the ID pattern, validation colours |
+| [DataFlowCatalog.js](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js) | The catalog class and its storage on the page |
+
+### 20.2 The catalog
+
+[DataFlowCatalog](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L15) holds the systems, datasets, attributes, actions and relationships of one page.
+
+- **Data structures:** null-prototype maps keyed by ID (format in DATAFLOW.md §4.2). The class has no DOM or graph access.
+- **Changes:** made only through its methods (`addSystem`, `addDataset`, `setDatasetAttributes`, `addRelationship`, `addAction`, `setActionConfig`, `remove*`, …).
+- **Validation:** invalid input throws before anything changes.
+- **Cascades:** removals cascade (DATAFLOW.md §4.3) and return a report `{systems, datasets, attributes, actions, relationships, flagged}`.
+  - Actions whose configuration lost a reference get an `attention` entry rather than being rewritten.
+  - [removeDataset](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L1027) shows the pattern.
+  - [getRemovalImpact](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L1389) runs a removal on a copy, for confirmation dialogs.
+
+**Storage.** The catalog is JSON in the `dataflow` attribute of the page's **root cell**.
+- [read](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L184) parses it into a new instance.
+- [write](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L206) stores it with `graph.setAttributeForCell`, so the change is an undoable `mxValueChange`. Nothing is written if the JSON is unchanged.
+- [edit](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L223) wraps read → change → write in one model transaction. Cell changes made inside the callback are undone together with the catalog, and nothing is stored if the callback throws.
+
+Because the catalog lives on the root cell:
+- each page has its own catalog;
+- duplicating a page copies it;
+- other page data (*Edit Data* on the background) is kept;
+- it is saved compressed or uncompressed like any cell value.
+
+**Loading untrusted files.** [load](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L307) treats the JSON as untrusted (§16).
+- **Dropped:** invalid IDs (including `__proto__`, `constructor` and `prototype`), wrong types, dangling references and unknown action types.
+- **Repaired:** names are truncated, attribute lists are de-duplicated, and an invalid cardinality becomes `1:N`.
+- **Action configurations** go through [sanitizeConfig](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L575).
+- **Reporting:** repairs are collected in `warnings` and logged once per stored text. Invalid JSON reads as an empty catalog.
+
+### 20.3 Tests
+
+[etc/test/dataflow/](../etc/test/dataflow/) contains headless browser tests that run inside the editor. To run them:
+
+```sh
+cd etc/test/dataflow && npm install
+node run.js                                  # dev mode, http://127.0.0.1:8080/?dev=1
+node run.js http://127.0.0.1:8080/           # built bundles
+```
+
+- [run.js](../etc/test/dataflow/run.js) injects [harness.js](../etc/test/dataflow/harness.js) and every `*.test.js` with `page.evaluate`, because the editor's CSP blocks injected script tags.
+- Each test gets a fresh blank file.
+- Snap Firefox needs `DATAFLOW_TEST_PROFILE` pointing to a folder under `~/snap/firefox/common`.
+- [catalog.test.js](../etc/test/dataflow/catalog.test.js) covers entities, cascades, sanitising and hostile keys.
+- [storage.test.js](../etc/test/dataflow/storage.test.js) covers the page root, undo/redo, save/load (plain and compressed), pages and damaged files.
