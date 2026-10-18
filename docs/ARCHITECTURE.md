@@ -1,6 +1,6 @@
 # draw.io (`drawio_data`) — Architecture and Code Guide
 
-> A reference to how this fork of draw.io works, organised so that each subsystem has a stable section number to cite in discussions and change requests (e.g. "see §7.1 file format"). Code locations are given as repository-relative links. The document was written against upstream **version 32.5.5** (see [VERSION](../VERSION)). Line numbers were last updated with CHG-002 and will drift as the code changes. Function names are the reliable anchors.
+> A reference to how this fork of draw.io works, organised so that each subsystem has a stable section number to cite in discussions and change requests (e.g. "see §7.1 file format"). Code locations are given as repository-relative links. The document was written against upstream **version 32.5.5** (see [VERSION](../VERSION)). Line numbers were last updated with CHG-007 and will drift as the code changes. Function names are the reliable anchors.
 >
 > **Fork changes** are recorded in [CHANGES.md](CHANGES.md) (one `CHG-NNN` entry per change, with its impact). When a change alters behaviour described here, the relevant section is updated in the same change and notes the entry ID.
 
@@ -25,6 +25,7 @@
 17. [Cross-cutting Conventions](#17-cross-cutting-conventions)
 18. [How-to Guide for Common Changes](#18-how-to-guide-for-common-changes)
 19. [Glossary](#19-glossary)
+20. [Data Flow Diagrams (fork feature)](#20-data-flow-diagrams-fork-feature)
 
 ---
 
@@ -75,7 +76,7 @@ The front end is a stack of four layers. Each upper layer **patches the prototyp
 - **All export is client-side.** VSDX export and server-side (export-service) export have been removed from this fork (CHG-001, [CHANGES.md](CHANGES.md)). PDF uses the browser print dialog.
 - **The UI is English only.** All translations and the language picker have been removed; `resources/dia.txt` is the single string bundle (CHG-002, [§13.3](#133-ui-text-resources)).
 - The stencil XML sources, the collaboration relay and cache servers, `OrgSettings.js` and the Atlassian/monday plugins are **not in this repository**.
-- The committed `js/*.min.js` bundles currently predate CHG-001 and CHG-002. Normal mode runs them until they are rebuilt, while `?dev=1` runs the current sources ([CHANGES.md › Open follow-ups](CHANGES.md#open-follow-ups)).
+- The committed `js/*.min.js` bundles were rebuilt after CHG-001 and CHG-002, so normal mode and `?dev=1` run the same code. Rebuild them (`cd etc/build && ant`, [§3](#3-build-system-and-release-artefacts)) whenever you change a source file.
 - Upstream does not accept pull requests (README). This fork is the place to make changes.
 
 ---
@@ -93,13 +94,15 @@ drawio_data/
 ├── docs/
 │   ├── ARCHITECTURE.md          ← this document
 │   ├── CHANGES.md               log of every change made in this fork (CHG-NNN)
+│   ├── DATAFLOW.md              design spec of the data flow diagrams                   §20
 │   ├── code-review.md           review checklist
 │   └── dialog-style-guide.md    rules for building dialogs (§17.6)
 ├── etc/
 │   ├── build/                   build.xml, build.properties, compiler.jar (Closure)      §3
 │   ├── integrate/Integrate.js   bootstrap appended to integrate.min.js                   §3.3
 │   ├── dependencies/            vendored-library manifest + DOMPurify smoke test        §3.3
-│   └── imageResize/             Node CLI to shrink embedded images in .drawio files      §3.3
+│   ├── imageResize/             Node CLI to shrink embedded images in .drawio files      §3.3
+│   └── test/dataflow/           headless browser tests of the data flow diagrams        §20.8
 └── src/main/
     ├── server/java/com/mxgraph/online/   Java servlets (OAuth, proxy, embed, log)          §15
     └── webapp/                            the deployable web root (= the WAR contents)
@@ -111,6 +114,7 @@ drawio_data/
         │   ├── bootstrap.js, main.js, PreConfig.js, PostConfig.js                          §4
         │   ├── grapheditor/   generic editor layer (Editor, EditorUi, Graph, Format, …)    §6
         │   ├── diagramly/     application layer (App, files, sync, dialogs, menus, …)      §7–§12
+        │   │   ├── dataflow/  data flow diagrams (fork feature)                            §20
         │   │   ├── sidebar/   68 shape-library definitions + sidebar extensions            §8.4
         │   │   ├── vsdx/ emf/ graphml/ miro/   importers                                    §12.1
         │   │   ├── gif/       animated GIF/MP4 export                                      §12.2
@@ -153,7 +157,7 @@ javac.dir=${war.dir}/WEB-INF/classes
 war.name=draw.war
 ```
 
-There is **no npm/webpack build** for the application. Every source file is plain ES5-style JavaScript using global constructors and `prototype` assignment, and the minified bundles are concatenations of Closure-compiled sources plus pre-minified vendor libraries. The compiled bundles are **committed to the repository** (`js/app.min.js`, `js/viewer.min.js`, …). If you edit a source file and run in production mode without rebuilding, your change will not be visible. Use `?dev=1` (see [§4.3](#43-development-mode-dev1)) while developing.
+There is **no npm/webpack build** for the application. Every source file is plain ES5-style JavaScript using global constructors and `prototype` assignment, and the minified bundles are concatenations of Closure-compiled sources plus pre-minified vendor libraries. The compiled bundles are **committed to the repository** (`js/app.min.js`, `js/viewer.min.js`, …). If you edit a source file and run in production mode without rebuilding, your change will not be visible. Use `?dev=1` (see [§4.3](#43-development-mode-dev1)) while developing, and rebuild before committing. On the development machine a per-user JDK 21 and Ant 1.10.14 are installed in `~/.local/opt`: `export JAVA_HOME=~/.local/opt/jdk-21.0.12.1+1 PATH=$JAVA_HOME/bin:~/.local/opt/apache-ant-1.10.14/bin:$PATH`, then `cd etc/build && ant` (about 35 s).
 
 CI ([.github/workflows/war.yml](../.github/workflows/war.yml), and the legacy [.travis.yml](../.travis.yml)) runs `ant war` on JDK 8 when a `v*` tag is pushed and attaches `build/draw.war` to a GitHub release. [.github/workflows/stale.yml](../.github/workflows/stale.yml) is an issue-housekeeping bot.
 
@@ -241,7 +245,7 @@ To run the app from source, serve `src/main/webapp` over HTTP and open `index.ht
 
 Configuration is layered through **global `window.*` variables**. Most files set a value only if it is still unset (`window.X = window.X || default`), so the earliest assignment usually wins. `PostConfig.js` is the exception:
 
-1. [js/PreConfig.js](../src/main/webapp/js/PreConfig.js) is the **deployment hook**. It is loaded on every host except `*.draw.io`/`*.diagrams.net` and in Electron, so it always applies to a self-hosted copy. It sets `DRAWIO_PUBLIC_BUILD = true`, a TEMPORARY `EXPORT_URL = null` guard that only exists for the stale prebuilt bundles and will be removed after the rebuild (CHG-001), `DRAWIO_BASE_URL`, `DRAWIO_VIEWER_URL`, `DRAWIO_LIGHTBOX_URL`, `DRAW_MATH_URL = 'math4/es5'`, `DRAWIO_CONFIG = null` (a global JSON configuration, see [§7.2](#72-editorconfigure-and-the-configuration-object)), and forces `urlParams['sync'] = 'manual'`. **This is the file to edit for a self-hosted deployment.**
+1. [js/PreConfig.js](../src/main/webapp/js/PreConfig.js) is the **deployment hook**. It is loaded on every host except `*.draw.io`/`*.diagrams.net` and in Electron, so it always applies to a self-hosted copy. It sets `DRAWIO_PUBLIC_BUILD = true`, `DRAWIO_BASE_URL`, `DRAWIO_VIEWER_URL`, `DRAWIO_LIGHTBOX_URL`, `DRAW_MATH_URL = 'math4/es5'`, `DRAWIO_CONFIG = null` (a global JSON configuration, see [§7.2](#72-editorconfigure-and-the-configuration-object)), and forces `urlParams['sync'] = 'manual'`. **This is the file to edit for a self-hosted deployment.**
 2. [js/diagramly/Init.js](../src/main/webapp/js/diagramly/Init.js) sets the URLs (`DRAWIO_SERVER_URL`, `PROXY_URL`, `SAVE_URL`, `REALTIME_URL`, `RT_WEBSOCKET_URL`, `NOTIFICATIONS_URL`, `ICONSEARCH_PATH`, `ICON_SERVICE_PATH`, `TEMPLATE_PATH`, `SHAPES_PATH`, `RESOURCES_PATH`, GitHub/GitLab client IDs) and `ALLOW_CUSTOM_PLUGINS`. The UI is English only ([CHG-002](CHANGES.md#chg-002--english-only-user-interface)): it sets `mxLanguage = 'en'` and `mxLanguages = []`, so `?lang`, stored settings and the browser language are ignored. It also resolves `uiTheme` (`?ui` or the stored setting) and normalises the parameter combinations:
    - `lightbox=1` ⇒ `chrome=0`
    - `embedInline=1` ⇒ `embed=1, ui=sketch, plugins=0, proto=json`
@@ -1163,3 +1167,199 @@ New dialogs should use `CustomDialog` and `ui.showDialog(dlg.container, width, n
 | **Locked group / transparentBounds** | Group behaviours: children not individually selectable; bounds derived from the children |
 | **Hover icons** | The blue arrows around a hovered shape for quick connect and clone (`HoverIcons`) |
 | **Shape picker** | The popup of shapes shown when dropping an edge on empty space or double-clicking the background |
+
+---
+
+## 20. Data Flow Diagrams (fork feature)
+
+A fork-only feature for visualising data flow between systems. The agreed design is in [DATAFLOW.md](DATAFLOW.md), and progress is tracked as one CHG entry per phase in [CHANGES.md](CHANGES.md). All five phases are implemented; this section describes the code.
+
+| Phase | State |
+|---|---|
+| 1. Catalog (storage, integrity rules, undo) | **Done** (CHG-003) |
+| 2. Systems & datasets (palette, dialogs, shapes, editing, deletion) | **Done** (CHG-004) |
+| 3. Actions (four actions, connection rules, streams, dialogs, lineage, validation highlight, needs-setup/attention) | **Done** (CHG-005) |
+| 4. Model view (layers, tables, relationships, lineage, switch, model editing) | **Done** (CHG-006) |
+| 5. Hardening (copy and paste, performance, docs) | **Done** (CHG-007) |
+
+### 20.1 Files and loading
+
+The sources are in [js/diagramly/dataflow/](../src/main/webapp/js/diagramly/dataflow/). They are loaded after the diagramly core: by [Devel.js](../src/main/webapp/js/diagramly/Devel.js) in dev mode, and compiled into `app.min.js` by the Step 9 source list in [etc/build/build.xml](../etc/build/build.xml). They are not part of the viewer bundles, which only need the materialised cells (DATAFLOW.md §5.1): the viewer and every export draw data flow shapes with no extra code. The UI strings are the `df*` keys in `resources/dia.txt`, and the attribute editor's CSS is the `.geDataFlow*` block at the end of `styles/grapheditor.css`.
+
+| File | Contents |
+|---|---|
+| [DataFlow.js](../src/main/webapp/js/diagramly/dataflow/DataFlow.js) | `DataFlow` namespace: the catalog attribute name and version, action types, cardinalities, the ID pattern, and the colours, sizes and [cell styles](../src/main/webapp/js/diagramly/dataflow/DataFlow.js#L88) of every shape |
+| [DataFlowCatalog.js](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js) | The catalog class and its storage on the page |
+| [DataFlowStreams.js](../src/main/webapp/js/diagramly/dataflow/DataFlowStreams.js) | Connection rules, streams and action states (no changes to the model) |
+| [DataFlowModel.js](../src/main/webapp/js/diagramly/dataflow/DataFlowModel.js) | Model view: layers, view switching, tables and columns, relationship and lineage edges, placement and layout |
+| [DataFlowView.js](../src/main/webapp/js/diagramly/dataflow/DataFlowView.js) | Catalog → cells: creates system, dataset, attribute-row and action cells; `sync` re-renders every shape and edge from the catalog |
+| [DataFlowDialogs.js](../src/main/webapp/js/diagramly/dataflow/DataFlowDialogs.js) | System, Dataset, Export, Filter, Validation and Addition dialogs; the attribute editor, the stream tree and the mapping rows |
+| [DataFlowUi.js](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js) | Editor integration (`ui.dataFlow`): palette, drop handling, double-click, context menu, deletion, drop rules |
+
+### 20.2 The catalog
+
+[DataFlowCatalog](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L15) holds the systems, datasets, attributes, actions and relationships of one page.
+
+- **Data structures:** null-prototype maps keyed by ID (format in DATAFLOW.md §4.2). The class has no DOM or graph access.
+- **Changes:** made only through its methods (`addSystem`, `addDataset`, `setDatasetAttributes`, `addRelationship`, `addAction`, `setActionConfig`, `remove*`, …).
+- **Validation:** invalid input throws before anything changes.
+- **Cascades:** removals cascade (DATAFLOW.md §4.3) and return a report `{systems, datasets, attributes, actions, relationships, flagged}`.
+  - Actions whose configuration lost a reference get an `attention` entry rather than being rewritten.
+  - [removeDataset](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L1027) shows the pattern.
+  - [getRemovalImpact](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L1397) runs a removal on a copy, for confirmation dialogs.
+
+**Storage.** The catalog is JSON in the `dataflow` attribute of the page's **root cell**.
+- [read](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L184) parses it into a new instance.
+- [write](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L206) stores it with `graph.setAttributeForCell`, so the change is an undoable `mxValueChange`. Nothing is written if the JSON is unchanged.
+- [edit](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L223) wraps read → change → write in one model transaction. Cell changes made inside the callback are undone together with the catalog, and nothing is stored if the callback throws.
+
+Because the catalog lives on the root cell:
+- each page has its own catalog;
+- duplicating a page copies it;
+- other page data (*Edit Data* on the background) is kept;
+- it is saved compressed or uncompressed like any cell value.
+
+**Loading untrusted files.** [load](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L307) treats the JSON as untrusted (§16).
+- **Dropped:** invalid IDs (including `__proto__`, `constructor` and `prototype`), wrong types, dangling references and unknown action types.
+- **Repaired:** names are truncated, attribute lists are de-duplicated, and an invalid cardinality becomes `1:M`. Cardinalities written with `N` before CHG-008 (`1:N`, `N:1`, `N:M`) load as `1:M`, `M:1`, `M:M` (`DataFlow.normalizeCardinality`).
+- **Action configurations** go through [sanitizeConfig](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L575).
+- **Reporting:** repairs are collected in `warnings` and logged once per stored text. Invalid JSON reads as an empty catalog.
+
+### 20.3 Shapes and editing
+
+**Shapes are ordinary cells.**
+- **System shape:** a swimlane with a stack layout. Its value is an `object` with `dfType="system"`, `dfId` (the catalog ID), an HTML `label` (name, owner, environment chip) and a `tooltip` (the notes).
+- **Dataset shape:** a collapsible swimlane inside a system, collapsed by default.
+- **Attribute rows:** text cells inside a dataset, one per attribute. They can't be moved, deleted or edited on their own.
+- **Entity text** is always HTML-escaped before it goes into a label.
+
+**Actions and flow edges.**
+- **Action shape:** one built-in shape per type (rounded box, inverted trapezoid, hexagon, ellipse; [DataFlow.ACTIONS](../src/main/webapp/js/diagramly/dataflow/DataFlow.js#L117)). The label is inside: glyph and name, a V-number badge for validations, and an amber "!" when the action needs attention. The value carries `dfType="action"`, `dfId` and `dfAction` (the type).
+- **Needs setup:** while connections are missing or the dialog is not done, the shape is a dashed outline. Its tooltip says what is missing or what no longer matches.
+- **Flow edges** carry `dfType="flow"` and a role in `dfRole`: `primary` (enters left), `secondary` (enters at the bottom, dashed), `output` (action → system) or `invalid` (red dashed, with the reason as tooltip). [syncEdge](../src/main/webapp/js/diagramly/dataflow/DataFlowView.js#L446) sets the role and style. It keeps a role while it stays valid, and gives the bottom port or a taken primary input the secondary role.
+
+**Streams and rules** ([DataFlowStreams.js](../src/main/webapp/js/diagramly/dataflow/DataFlowStreams.js)):
+- [getConnection](../src/main/webapp/js/diagramly/dataflow/DataFlowStreams.js#L167) applies the rules of DATAFLOW.md §6.2, including loops through action-to-action edges.
+- [getNodeStream](../src/main/webapp/js/diagramly/dataflow/DataFlowStreams.js#L267) computes what flows on: a system shape passes its datasets, a Validation its input, an Addition its input plus the added dataset. Export and Filter continue from their target system.
+- [getActionState](../src/main/webapp/js/diagramly/dataflow/DataFlowStreams.js#L417) returns missing connections, whether the dialog is done, and problems: catalog `attention` flags, plus inputs that no longer contain what the configuration uses.
+
+**Dialogs and apply.**
+- [configureAction](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L1135) opens the dialog of the type.
+- `applyExport` and `applyFilter` create or update the output datasets in the target system. [setDerivedAttributes](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L1226) keeps attribute IDs per source, so lineage and relationships survive re-configuring, makes names unique, and keeps hand-added attributes. Each shows its dataset in the target system shape.
+- `applyValidation` stores the pairs.
+- `applyAddition` replaces the Addition's relationships.
+- Unchecking a dataset in a Filter deletes its copy (an explicit choice). Upstream changes never delete outputs.
+
+**Sync.** [DataFlowView.update](../src/main/webapp/js/diagramly/dataflow/DataFlowView.js#L660) runs a catalog edit and then [sync](../src/main/webapp/js/diagramly/dataflow/DataFlowView.js#L558) in the same transaction. Sync updates labels and tooltips, rebuilds attribute rows that no longer match the catalog, and removes the shapes of entities that no longer exist (D17). One undo therefore reverts the entity and all its shapes.
+
+**Editor hooks** ([DataFlowUi.init](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L21)):
+
+| Hook | Behaviour |
+|---|---|
+| `Sidebar.init` | Adds the *Data Flow* palette (System, Dataset) above *General*. It is always shown and is not in the library configuration. |
+| [Sidebar.createDropHandler](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L1875) | Dropping or clicking a palette item (a cell with `dfTemplate`) opens a dialog instead of inserting cells. A Dataset needs a system: the drop target, or the selected system when clicked. Its drop position sets its place in the stack. |
+| `mxEvent.DOUBLE_CLICK` | Opens the System or Dataset dialog. A row opens its dataset. Label editing is off (`editable=0`). |
+| `mxEvent.REMOVE_CELLS` | Inside the removal transaction, [cellsRemoved](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L432) deletes the entities whose last shape was removed (D19). |
+| `graph.isValidDropTarget` | A system accepts only its own datasets, a dataset accepts nothing, and datasets can't be dropped anywhere else. |
+| `graphHandler.shouldRemoveCellsFromParent` | Datasets can't be dragged out of their system. |
+| `Menus.createPopupMenu` | Context menu: *Edit System…*, *Add Dataset…*, *Edit Dataset…*, *Delete Everywhere…*, *Configure Action…* |
+| `mxEvent.CELLS_ADDED` | Copied action shapes (paste, duplicate, Ctrl+drag) get a new, unconfigured action. An action has one shape. |
+| `mxEvent.CELL_CONNECTED` | Any connection touching a data flow node re-syncs, which sets edge roles and action states. |
+| `graph.getEdgeValidationError` / `validationAlert` | Refuses connections that break the rules while dragging, and explains why in a dialog instead of `window.alert`. |
+| `connectionHandler` `CONNECT` | Opens the action's dialog once its last required connection is made. |
+| [graph.deleteCells](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L136) | Asks before a delete whose cascade removes relationships or changes actions beyond the selection. |
+| Selection and model changes | Selecting a Validation dims every shape it doesn't compare (opacity on the SVG nodes only, not a model change). |
+
+**Public methods** (used by the dialogs and the tests): `placeSystem`, `placeDataset`, `placeAction`, `editSystem`, `editDataset`, `deleteEntity`, `showSystemDialog`, `showDatasetDialog`, `configureAction`, `applyExport`, `applyFilter`, `applyValidation`, `applyAddition`, `editCell`.
+
+**Re-entrancy.** `DataFlowUi.update` counts nested calls (`updating`). The `CELLS_ADDED`, `CELL_CONNECTED` and `REMOVE_CELLS` handlers ignore changes made by its own updates and by `sync` (`DataFlowView.syncing`).
+
+**Folding.** Datasets stay `resizable`, because `Graph.isCellFoldable` refuses non-resizable containers. The stack layout sets their size anyway.
+
+### 20.4 Model view
+
+The model view lives in the same page as the flow, in layers marked with `dfLayer` (DATAFLOW.md §7):
+
+| Layer | Contents |
+|---|---|
+| `flow` | The existing layer of the flow shapes. It is marked the first time the model view is shown and is otherwise unchanged. |
+| `model` ("Data Model") | One table per dataset (`dfType="table"`, a swimlane in the system's palette colour) with one row per attribute (`column`), plus relationship edges (`relationship`) between rows: ER markers per side of the cardinality (`1` → `ERmandOne`, `M` → `ERmany`), labelled with the cardinality and "· Addition" for Addition relationships. |
+| `lineage` | One dashed edge per pair of datasets (`lineage`, with `dfFrom`/`dfTo`), labelled with the number of copied attributes. Rows that are copies show a ↳ mark with the source in the tooltip. |
+
+- **Switching views.** [applyView](../src/main/webapp/js/diagramly/dataflow/DataFlowModel.js#L186) shows one layer and hides (and locks) the other. The lineage layer is shown only in the model view with *Show lineage* on. The view is stored on the page root (`dfView`, `dfLineage`), and switching is one undoable edit.
+- **The view switch.** [createViewBar](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L1621) is a *Flow | Model* switch centred over the canvas, shown on pages that have a catalog, with *Show lineage* and *Re-arrange* in the model view. It is placed in the canvas's parent (the canvas scrolls) and repositioned by a wrapper on `EditorUi.refresh`, page changes and model changes. The background context menu also offers *Show Model View* / *Show Flow View*. The viewer switches through its layers button.
+- **Sync.** Once the model layer exists, [DataFlowModel.sync](../src/main/webapp/js/diagramly/dataflow/DataFlowModel.js#L412) runs at the end of every `DataFlowView.sync`, so the model is always current and table positions are never reset. [syncColumns](../src/main/webapp/js/diagramly/dataflow/DataFlowModel.js#L350) reuses the cell of each attribute, so relationship edges stay attached through renames and reordering. New tables are placed by [placeTable](../src/main/webapp/js/diagramly/dataflow/DataFlowModel.js#L685): right of a related table, otherwise right of all tables, then moved down until nothing overlaps. Removals use `DataFlowModel.removeCells`, because `graph.removeCells` skips `deletable=0` cells.
+- **Layout.** [arrange](../src/main/webapp/js/diagramly/dataflow/DataFlowModel.js#L750) runs the first time and on *Re-arrange*. It puts tables in columns by lineage depth (originals, then their copies, …) and groups them by system within a column. It is deterministic, instead of draw.io's hierarchical layout.
+- **Editing.**
+  - Drawing from row to row is intercepted in [connectionHandler.connect](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L204): no edge is inserted. The cardinality picker opens and the relationship is added to the catalog; sync draws it.
+  - Double-clicking a relationship changes its cardinality; double-clicking a table or row edits the dataset.
+  - Deleting a relationship edge deletes the relationship, which flags its Addition. Deleting a table asks first, then deletes the dataset everywhere.
+  - Rows can't be moved or deleted. Relationship and lineage edges can't be disconnected (`isCellDisconnectable`). Lineage edges can't be deleted.
+  - Palette drops in the model view ask to switch back to the flow view. Flow placements always go to the flow layer (`getFlowLayer`).
+
+### 20.5 Copy and paste
+
+Shapes carry their entities through the clipboard, so copy and paste, cut and paste, and pasting into another page or file keep their data:
+
+- **Copying.** The per-graph wrapper on `encodeCells` (used by copy, cut, libraries and drag between windows) calls [addFragments](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L795). It adds a `dfData` attribute to every encoded data flow cell with a catalog fragment from [extract](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L1417):
+  - a system: the system;
+  - a dataset or table: the dataset with its attributes and system;
+  - an action: the action;
+  - a relationship edge: the relationship.
+
+  The shapes on the page are not changed.
+- **Pasting.** [cellsAdded](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L840) runs inside the paste transaction:
+  - It imports what the page lacks with [importFragment](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L1480). IDs are kept, because they are random, so an existing ID is the same entity. The merged result is validated like a loaded file, so clipboard data from anywhere is untrusted input (§16).
+  - It strips `dfData`.
+  - A dataset that lands outside its system moves into a shape of that system that doesn't show it yet, or is dropped. Loose attribute rows, and model-view cells pasted outside the model layers, are dropped.
+  - A copy of an action shape gets its own new action.
+  - Imported entities that ended up without shapes are removed again (D19).
+- **Limits.**
+  - Relationships removed by a cut stay removed unless their edges were in the cut.
+  - An action pasted without its output dataset is unconfigured.
+
+### 20.6 Performance
+
+[perf.test.js](../etc/test/dataflow/perf.test.js) builds 50 systems with 10 datasets of 8 attributes (500 datasets, 4,000 attributes) plus 25 configured Exports. Measured in headless Firefox (dev mode and bundles alike):
+
+| Operation | Time |
+|---|---|
+| Rename a system, edit a dataset (full sync) | ≈ 80 ms |
+| Configure an Export | ≈ 135 ms |
+| Edit while in the model view | ≈ 125 ms |
+| First switch to the model view (525 tables, layout) | ≈ 2.2 s |
+| Later switches | 0.6–1.6 s, mostly draw.io drawing the shown layer |
+
+The first switch skips per-table placement because the layout places everything (`DataFlowModel.sync(…, noPlacement)`). The test fails if edits take over 1.5 s or switches over 2 s.
+
+### 20.7 Extending the feature
+
+- **New action type:**
+  - Add it to `DataFlow.ACTION_TYPES` and `DataFlow.ACTIONS`.
+  - Add its config sanitizing in `DataFlowCatalog.sanitizeConfig` and its cascades in `remove*`.
+  - Add its stream rule in `DataFlowStreams.getNodeStream` and its connection rules in `getConnection`.
+  - Add its state checks in `getActionState`, a dialog in `DataFlowDialogs`, and an `apply*` plus a case in `DataFlowUi.configureAction`.
+  - Add the `dfAction_*` and `dfConfigure_*` strings, and tests.
+- **New entity field:** extend `DataFlowCatalog.load` (validation) and the `add`/`update` methods first; everything else reads the catalog.
+- **Change a colour or size:** edit `DataFlow.js` only.
+
+### 20.8 Tests
+
+[etc/test/dataflow/](../etc/test/dataflow/) contains headless browser tests that run inside the editor. To run them:
+
+```sh
+cd etc/test/dataflow && npm install
+node run.js                                  # dev mode, http://127.0.0.1:8080/?dev=1
+node run.js http://127.0.0.1:8080/           # built bundles
+```
+
+- [run.js](../etc/test/dataflow/run.js) injects [harness.js](../etc/test/dataflow/harness.js) and every `*.test.js` with `page.evaluate`, because the editor's CSP blocks injected script tags.
+- Each test gets a fresh blank file.
+- Snap Firefox needs `DATAFLOW_TEST_PROFILE` pointing to a folder under `~/snap/firefox/common`.
+- [catalog.test.js](../etc/test/dataflow/catalog.test.js) covers entities, cascades, sanitising and hostile keys.
+- [storage.test.js](../etc/test/dataflow/storage.test.js) covers the page root, undo/redo, save/load (plain and compressed), pages and damaged files.
+- [clipboard.test.js](../etc/test/dataflow/clipboard.test.js) covers the copied fragments, paste on the same page, cut and paste, paste into another page and another file, datasets pasted on their own, model cells pasted into the flow, hostile clipboard data and library drops.
+- [perf.test.js](../etc/test/dataflow/perf.test.js) is the performance check of §20.6. Its timings are printed under *Notes*.
+- [model.test.js](../etc/test/dataflow/model.test.js) covers the layers and switching (with undo), tables and colours, columns with lineage marks, relationship markers and labels, lineage per dataset, *Show lineage*, the first layout, kept positions and placement, rows kept through edits, drawing and changing relationships, deleting edges and tables, drop rules, the view switch and save/load.
+- [actions.test.js](../etc/test/dataflow/actions.test.js) covers the action palette and states, every connection rule, edge roles and styles, the four actions through their apply functions and dialogs, lineage, highlighting and focus, needs-attention, the delete confirmation, copying and deleting actions, rewiring, auto-opening and save/load.
+- [ui.test.js](../etc/test/dataflow/ui.test.js) covers the palette, placement, label escaping, folding and layout, edits shown on every shape, deletion, drop rules, double-click, both dialogs (including pasting attributes and validation) and the context menu.

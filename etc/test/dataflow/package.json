@@ -1,0 +1,11 @@
+{
+  "name": "drawio-dataflow-tests",
+  "private": true,
+  "description": "Headless browser tests for the data flow diagrams (docs/DATAFLOW.md)",
+  "scripts": {
+    "test": "node run.js"
+  },
+  "devDependencies": {
+    "puppeteer-core": "23.11.1"
+  }
+}

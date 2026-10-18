@@ -4117,3 +4117,136 @@ span.geCommentsBadge {
 	transform: translate(0, 0);
 	z-index: 0;
 }
+/* Data flow diagrams: attribute editor in the dataset dialog (DataFlowDialogs.js) */
+.geDataFlowAttrList {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	max-height: 240px;
+	overflow-y: auto;
+}
+
+.geDataFlowAttrRow {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.geDataFlowAttrRow input[type="text"] {
+	flex: 1;
+	min-width: 0;
+}
+
+.geDialog .geDataFlowAttrBtn {
+	min-width: 28px;
+	padding: 0 6px;
+	margin: 0;
+}
+
+.geDialog .geDataFlowAttrAdd {
+	margin: 8px 0 6px 0;
+}
+
+/* Data flow diagrams: dataset/attribute tree (Export, Filter) and attribute mapping (Validation, Addition) */
+.geDataFlowTree {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 280px;
+	overflow-y: auto;
+}
+
+.geDataFlowTreeDataset,
+.geDataFlowTreeAttribute {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 24px;
+}
+
+.geDataFlowTreeDataset:not(:first-child) {
+	margin-top: 6px;
+}
+
+.geDataFlowTreeAttribute {
+	padding-left: 22px;
+}
+
+.geDataFlowMapping {
+	max-height: 220px;
+	overflow-y: auto;
+}
+
+.geDataFlowMapRow {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 6px;
+	min-height: 28px;
+}
+
+.geDataFlowMapRow > span:first-child {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	line-height: normal;
+}
+
+.geDataFlowMapTitle {
+	font-weight: 600;
+	margin-top: 8px;
+}
+
+/* Data flow diagrams: Flow | Model switch over the canvas (DataFlowUi.createViewBar) */
+.geDataFlowViewBar {
+	position: absolute;
+	z-index: 2;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px;
+	border-radius: 8px;
+	background: light-dark(var(--card-color), var(--dark-dialog-color));
+	border: 1px solid light-dark(var(--border-color), var(--dark-border-color));
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+	font-size: 12px;
+	white-space: nowrap;
+}
+
+.geDataFlowViewBtn {
+	font: inherit;
+	font-weight: 600;
+	color: light-dark(var(--secondary-text-color), var(--dark-secondary-text-color));
+	background: transparent;
+	border: 0;
+	border-radius: 6px;
+	padding: 5px 14px;
+	cursor: pointer;
+}
+
+.geDataFlowViewBtn:hover {
+	background: light-dark(var(--highlight-color), var(--dark-highlight-color));
+}
+
+.geDataFlowViewBtn[aria-pressed="true"] {
+	background: light-dark(var(--primary-color), var(--dark-accent-color));
+	color: light-dark(var(--strong-text-color), var(--dark-strong-text-color));
+}
+
+.geDataFlowViewBtn:focus-visible {
+	outline: 2px solid var(--focus-color);
+	outline-offset: 1px;
+}
+
+.geDataFlowViewCheck {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 0 8px 0 10px;
+	color: light-dark(var(--strong-text-color), var(--dark-strong-text-color));
+	border-left: 1px solid light-dark(var(--border-color), var(--dark-border-color));
+}
+
+.geDataFlowViewAction {
+	font-weight: normal;
+}

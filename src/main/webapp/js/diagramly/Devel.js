@@ -339,6 +339,15 @@ mxscript(drawDevUrl + 'js/diagramly/P2PCollab.js');
 mxscript(drawDevUrl + 'js/diagramly/DevTools.js');
 mxscript(drawDevUrl + 'js/diagramly/Simple.js');
 
+// Data flow diagrams (docs/DATAFLOW.md)
+mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlow.js');
+mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlowCatalog.js');
+mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlowStreams.js');
+mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlowModel.js');
+mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlowView.js');
+mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlowDialogs.js');
+mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlowUi.js');
+
 if (window.DRAWIO_PUBLIC_BUILD)
 {
 	// The public repository ships the stencil bundle without the stencil XML
