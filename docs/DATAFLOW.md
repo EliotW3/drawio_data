@@ -1,6 +1,6 @@
 # Data Flow Diagrams: Design Spec
 
-> Status: **agreed 2026-10-18**. Phase 1 (catalog) is implemented (CHG-003). What exists is described in [ARCHITECTURE.md §20](ARCHITECTURE.md#20-data-flow-diagrams-fork-feature-in-progress). Implementation is tracked as CHG entries in [CHANGES.md](CHANGES.md), one per phase ([§11](#11-phases)), and the finished feature gets its own section in [ARCHITECTURE.md](ARCHITECTURE.md).
+> Status: **agreed 2026-10-18**. Phases 1 (catalog, CHG-003) and 2 (systems and datasets, CHG-004) are implemented. What exists is described in [ARCHITECTURE.md §20](ARCHITECTURE.md#20-data-flow-diagrams-fork-feature-in-progress). Implementation is tracked as CHG entries in [CHANGES.md](CHANGES.md), one per phase ([§11](#11-phases)), and the finished feature gets its own section in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 1. Goal
 
@@ -126,18 +126,18 @@ Whenever an entity changes (rename, attributes added/removed/reordered), the vie
 ### 5.2 System
 
 - **Shape:** a container (swimlane) with a header and a vertical stack of dataset occurrences (`childLayout=stackLayout`, resizes to fit).
-- **Header:** the name in bold, with a second line showing `owner · environment`.
-- **Environment chip:** the environment text (e.g. `SAP`, `Excel`, `Manual`) in a neutral chip in the header ([§9](#9-visual-style)).
-- **Notes:** a notes icon in the header when notes exist. The tooltip shows them.
+- **Header:** the name in bold, with the owner on a second line.
+- **Environment chip:** the environment text (e.g. `SAP`, `Excel`, `Manual`) in a neutral chip next to the name ([§9](#9-visual-style)). *As built:* the chip sits beside the name rather than at the right edge, because an HTML label in a swimlane header only gets the width of its content.
+- **Notes:** shown as the shape's tooltip. *As built:* no icon yet. An icon would need a custom shape (see §5.3).
 - **Dropping System from the palette** opens the **System dialog** with two choices:
   - *Existing system:* a list of this page's systems. Placing one creates another occurrence of it (D6).
   - *New system:* name (required), owner, environment (free text, with the environments already used on this page offered as suggestions), and notes.
 - **Double-clicking** reopens the dialog for editing. Changes show on every occurrence.
-- **Adding datasets:** a hover **"+"** on the system adds a dataset, as does dropping the Dataset palette item onto the system.
+- **Adding datasets:** drop the Dataset palette item onto the system, click it while the system is selected, or use *Add Dataset…* in the system's context menu. *As built:* there's no hover "+" button. The context menu covers it.
 
 ### 5.3 Dataset
 
-- **Shape:** a collapsible swimlane inside a system occurrence. It is **collapsed by default** (D16) and shows `Workorders (12)`. Expanding it shows one row per attribute.
+- **Shape:** a collapsible swimlane inside a system occurrence. It is **collapsed by default** (D16) and shows `Workorders (12)`. Expanding it (the +/− icon) shows one row per attribute. *As built:* the dataset accent is a table glyph in the accent colour. The 4 px accent bar from the mock-up isn't used: it would need a custom shape, which the viewer bundles don't contain, and every shape must render in the viewer and exports (D18).
 - **Dropping a dataset into a system** opens the **Dataset dialog**:
   - *Existing:* this system's datasets that are not already in this occurrence (D6).
   - *New:* name plus the **attribute editor**: a list where you add, rename, remove and reorder rows. Pasting a block of lines (or a comma/tab-separated header row) adds them all at once.
@@ -247,7 +247,7 @@ Lineage edges are read-only.
 | An **action** | The action is deleted. Datasets it created **stay**, with their `origin` cleared and their lineage kept. *Relationships* an Addition created are deleted with it. |
 | *Delete everywhere* (context menu or dialog) | Deletes the entity and all its shapes immediately. |
 
-Every deletion that cascades beyond the selected shapes asks for confirmation and lists what else goes. All of it is one undo step.
+Every deletion that cascades beyond the selected shapes asks for confirmation and lists what else goes. All of it is one undo step. *As built (phase 2):* *Delete Everywhere…* and removing attributes that are in use ask for confirmation. The plain Delete key does not ask yet. Its cascades only reach relationships and actions, which appear in phases 3–4, so the confirmation comes with phase 3.
 
 ## 9. Visual style
 
@@ -257,7 +257,7 @@ These are proposals, kept as named style constants in one file so they can be tu
 |---|---|
 | **System** | Swimlane with a dark slate header `#334155` and white bold text, a `#F8FAFC` body, a `#CBD5E1` 1 px border, rounded corners (6) and a light shadow |
 | Environment chip | Neutral: `#E2E8F0` background, `#334155` text, rounded, 10 px |
-| **Dataset** | White card, `#CBD5E1` border, a 4 px left accent `#0EA5E9`, a table glyph, bold name with `(n)` count, collapsed by default |
+| **Dataset** | White card, `#CBD5E1` border, a table glyph in the accent `#0EA5E9`, bold name with `(n)` count, collapsed by default (built without the 4 px accent bar, see §5.3) |
 | Attribute row | 11 px, `#475569` text, alternating `#F1F5F9` background |
 | **Export** | `#2563EB` fill, white text, arrow glyph |
 | **Filter** | `#D97706` funnel |

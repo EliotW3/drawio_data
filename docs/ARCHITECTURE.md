@@ -1,6 +1,6 @@
 # draw.io (`drawio_data`) — Architecture and Code Guide
 
-> A reference to how this fork of draw.io works, organised so that each subsystem has a stable section number to cite in discussions and change requests (e.g. "see §7.1 file format"). Code locations are given as repository-relative links. The document was written against upstream **version 32.5.5** (see [VERSION](../VERSION)). Line numbers were last updated with CHG-003 and will drift as the code changes. Function names are the reliable anchors.
+> A reference to how this fork of draw.io works, organised so that each subsystem has a stable section number to cite in discussions and change requests (e.g. "see §7.1 file format"). Code locations are given as repository-relative links. The document was written against upstream **version 32.5.5** (see [VERSION](../VERSION)). Line numbers were last updated with CHG-004 and will drift as the code changes. Function names are the reliable anchors.
 >
 > **Fork changes** are recorded in [CHANGES.md](CHANGES.md) (one `CHG-NNN` entry per change, with its impact). When a change alters behaviour described here, the relevant section is updated in the same change and notes the entry ID.
 
@@ -102,7 +102,7 @@ drawio_data/
 │   ├── integrate/Integrate.js   bootstrap appended to integrate.min.js                   §3.3
 │   ├── dependencies/            vendored-library manifest + DOMPurify smoke test        §3.3
 │   ├── imageResize/             Node CLI to shrink embedded images in .drawio files      §3.3
-│   └── test/dataflow/           headless browser tests of the data flow diagrams        §20.3
+│   └── test/dataflow/           headless browser tests of the data flow diagrams        §20.4
 └── src/main/
     ├── server/java/com/mxgraph/online/   Java servlets (OAuth, proxy, embed, log)          §15
     └── webapp/                            the deployable web root (= the WAR contents)
@@ -1177,19 +1177,22 @@ A fork-only feature for visualising data flow between systems. The agreed design
 | Phase | State |
 |---|---|
 | 1. Catalog (storage, integrity rules, undo) | **Done** (CHG-003) |
-| 2. Systems & datasets | Not started |
+| 2. Systems & datasets (palette, dialogs, shapes, editing, deletion) | **Done** (CHG-004) |
 | 3. Actions | Not started |
 | 4. Model view | Not started |
 | 5. Hardening | Not started |
 
 ### 20.1 Files and loading
 
-The sources are in [js/diagramly/dataflow/](../src/main/webapp/js/diagramly/dataflow/). They are loaded after the diagramly core: by [Devel.js](../src/main/webapp/js/diagramly/Devel.js) in dev mode, and compiled into `app.min.js` by the Step 9 source list in [etc/build/build.xml](../etc/build/build.xml). They are not part of the viewer bundles, which only need the materialised cells (DATAFLOW.md §5.1).
+The sources are in [js/diagramly/dataflow/](../src/main/webapp/js/diagramly/dataflow/). They are loaded after the diagramly core: by [Devel.js](../src/main/webapp/js/diagramly/Devel.js) in dev mode, and compiled into `app.min.js` by the Step 9 source list in [etc/build/build.xml](../etc/build/build.xml). They are not part of the viewer bundles, which only need the materialised cells (DATAFLOW.md §5.1): the viewer and every export draw data flow shapes with no extra code. The UI strings are the `df*` keys in `resources/dia.txt`, and the attribute editor's CSS is the `.geDataFlow*` block at the end of `styles/grapheditor.css`.
 
 | File | Contents |
 |---|---|
-| [DataFlow.js](../src/main/webapp/js/diagramly/dataflow/DataFlow.js) | `DataFlow` namespace: the catalog attribute name and version, action types, cardinalities, the ID pattern, validation colours |
+| [DataFlow.js](../src/main/webapp/js/diagramly/dataflow/DataFlow.js) | `DataFlow` namespace: the catalog attribute name and version, action types, cardinalities, the ID pattern, and the colours, sizes and [cell styles](../src/main/webapp/js/diagramly/dataflow/DataFlow.js#L88) of every shape |
 | [DataFlowCatalog.js](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js) | The catalog class and its storage on the page |
+| [DataFlowView.js](../src/main/webapp/js/diagramly/dataflow/DataFlowView.js) | Catalog → cells: creates system, dataset and attribute-row cells, and `sync` re-renders every shape from the catalog |
+| [DataFlowDialogs.js](../src/main/webapp/js/diagramly/dataflow/DataFlowDialogs.js) | System and Dataset dialogs, the attribute editor |
+| [DataFlowUi.js](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js) | Editor integration (`ui.dataFlow`): palette, drop handling, double-click, context menu, deletion, drop rules |
 
 ### 20.2 The catalog
 
@@ -1220,7 +1223,33 @@ Because the catalog lives on the root cell:
 - **Action configurations** go through [sanitizeConfig](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js#L575).
 - **Reporting:** repairs are collected in `warnings` and logged once per stored text. Invalid JSON reads as an empty catalog.
 
-### 20.3 Tests
+### 20.3 Shapes and editing
+
+**Shapes are ordinary cells.**
+- **System shape:** a swimlane with a stack layout. Its value is an `object` with `dfType="system"`, `dfId` (the catalog ID), an HTML `label` (name, owner, environment chip) and a `tooltip` (the notes).
+- **Dataset shape:** a collapsible swimlane inside a system, collapsed by default.
+- **Attribute rows:** text cells inside a dataset, one per attribute. They can't be moved, deleted or edited on their own.
+- **Entity text** is always HTML-escaped before it goes into a label.
+
+**Sync.** [DataFlowView.update](../src/main/webapp/js/diagramly/dataflow/DataFlowView.js#L402) runs a catalog edit and then [sync](../src/main/webapp/js/diagramly/dataflow/DataFlowView.js#L333) in the same transaction. Sync updates labels and tooltips, rebuilds attribute rows that no longer match the catalog, and removes the shapes of entities that no longer exist (D17). One undo therefore reverts the entity and all its shapes.
+
+**Editor hooks** ([DataFlowUi.init](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L20)):
+
+| Hook | Behaviour |
+|---|---|
+| `Sidebar.init` | Adds the *Data Flow* palette (System, Dataset) above *General*. It is always shown and is not in the library configuration. |
+| [Sidebar.createDropHandler](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L630) | Dropping or clicking a palette item (a cell with `dfTemplate`) opens a dialog instead of inserting cells. A Dataset needs a system: the drop target, or the selected system when clicked. Its drop position sets its place in the stack. |
+| `mxEvent.DOUBLE_CLICK` | Opens the System or Dataset dialog. A row opens its dataset. Label editing is off (`editable=0`). |
+| `mxEvent.REMOVE_CELLS` | Inside the removal transaction, [cellsRemoved](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L257) deletes the entities whose last shape was removed (D19). |
+| `graph.isValidDropTarget` | A system accepts only its own datasets, a dataset accepts nothing, and datasets can't be dropped anywhere else. |
+| `graphHandler.shouldRemoveCellsFromParent` | Datasets can't be dragged out of their system. |
+| `Menus.createPopupMenu` | Context menu: *Edit System…*, *Add Dataset…*, *Edit Dataset…*, *Delete Everywhere…* |
+
+**Public methods** (used by the dialogs and the tests): `placeSystem`, `placeDataset`, `editSystem`, `editDataset`, `deleteEntity`, `showSystemDialog`, `showDatasetDialog`, `editCell`.
+
+**Folding.** Datasets stay `resizable`, because `Graph.isCellFoldable` refuses non-resizable containers. The stack layout sets their size anyway.
+
+### 20.4 Tests
 
 [etc/test/dataflow/](../etc/test/dataflow/) contains headless browser tests that run inside the editor. To run them:
 
@@ -1235,3 +1264,4 @@ node run.js http://127.0.0.1:8080/           # built bundles
 - Snap Firefox needs `DATAFLOW_TEST_PROFILE` pointing to a folder under `~/snap/firefox/common`.
 - [catalog.test.js](../etc/test/dataflow/catalog.test.js) covers entities, cascades, sanitising and hostile keys.
 - [storage.test.js](../etc/test/dataflow/storage.test.js) covers the page root, undo/redo, save/load (plain and compressed), pages and damaged files.
+- [ui.test.js](../etc/test/dataflow/ui.test.js) covers the palette, placement, label escaping, folding and layout, edits shown on every shape, deletion, drop rules, double-click, both dialogs (including pasting attributes and validation) and the context menu.

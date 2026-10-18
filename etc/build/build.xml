@@ -625,6 +625,9 @@ OUTPUT FILES (in src/main/webapp/js/):
 			<sources dir="${war.dir}/js/diagramly/dataflow">
 				<file name="DataFlow.js" />
 				<file name="DataFlowCatalog.js" />
+				<file name="DataFlowView.js" />
+				<file name="DataFlowDialogs.js" />
+				<file name="DataFlowUi.js" />
 			</sources>
 		</jscomp>
 

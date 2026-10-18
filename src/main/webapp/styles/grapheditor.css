@@ -4117,3 +4117,32 @@ span.geCommentsBadge {
 	transform: translate(0, 0);
 	z-index: 0;
 }
+/* Data flow diagrams: attribute editor in the dataset dialog (DataFlowDialogs.js) */
+.geDataFlowAttrList {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	max-height: 240px;
+	overflow-y: auto;
+}
+
+.geDataFlowAttrRow {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.geDataFlowAttrRow input[type="text"] {
+	flex: 1;
+	min-width: 0;
+}
+
+.geDialog .geDataFlowAttrBtn {
+	min-width: 28px;
+	padding: 0 6px;
+	margin: 0;
+}
+
+.geDialog .geDataFlowAttrAdd {
+	margin: 8px 0 6px 0;
+}

@@ -342,6 +342,9 @@ mxscript(drawDevUrl + 'js/diagramly/Simple.js');
 // Data flow diagrams (docs/DATAFLOW.md)
 mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlow.js');
 mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlowCatalog.js');
+mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlowView.js');
+mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlowDialogs.js');
+mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlowUi.js');
 
 if (window.DRAWIO_PUBLIC_BUILD)
 {
