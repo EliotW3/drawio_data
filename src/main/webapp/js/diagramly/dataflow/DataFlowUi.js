@@ -60,6 +60,14 @@ DataFlowUi.prototype.init = function()
 
 	graph.getEdgeValidationError = function(edge, source, target)
 	{
+		var types = [DataFlowView.getType(source), DataFlowView.getType(target)];
+
+		if (mxUtils.indexOf(types, DataFlowModel.COLUMN) >= 0 || mxUtils.indexOf(types, DataFlowModel.TABLE) >= 0)
+		{
+			return (types[0] == DataFlowModel.COLUMN && types[1] == DataFlowModel.COLUMN && source != target) ?
+				null : mxResources.get('dfConnectColumns');
+		}
+
 		var conn = DataFlowStreams.getConnection(this, edge, source, target, false);
 
 		if (conn != null && conn.error != null)
@@ -160,7 +168,8 @@ DataFlowUi.prototype.init = function()
 		{
 			return self.isDatasetDrop(target, cells);
 		}
-		else if (type == DataFlowView.DATASET || type == DataFlowView.ATTRIBUTE)
+		else if (type == DataFlowView.DATASET || type == DataFlowView.ATTRIBUTE ||
+			type == DataFlowModel.TABLE || type == DataFlowModel.COLUMN)
 		{
 			return false;
 		}
@@ -170,6 +179,41 @@ DataFlowUi.prototype.init = function()
 		}
 
 		return graphIsValidDropTarget.apply(this, arguments);
+	};
+
+	// Model view: rows connect to rows only, and drawing between two rows
+	// asks for the cardinality instead of inserting an edge (§7.3)
+	var connectionHandlerConnect = graph.connectionHandler.connect;
+
+	graph.connectionHandler.connect = function(source, target, evt, dropTarget)
+	{
+		if (DataFlowView.getType(source) == DataFlowModel.COLUMN &&
+			DataFlowView.getType(target) == DataFlowModel.COLUMN)
+		{
+			window.setTimeout(function()
+			{
+				self.showRelationshipDialog(source, target);
+			}, 0);
+
+			return null;
+		}
+
+		return connectionHandlerConnect.apply(this, arguments);
+	};
+
+	// Relationship and lineage edges follow the catalog, not dragging
+	var graphIsCellDisconnectable = graph.isCellDisconnectable;
+
+	graph.isCellDisconnectable = function(cell, terminal, source)
+	{
+		var type = DataFlowView.getType(cell);
+
+		if (type == DataFlowModel.RELATIONSHIP || type == DataFlowModel.LINEAGE)
+		{
+			return false;
+		}
+
+		return graphIsCellDisconnectable.apply(this, arguments);
 	};
 
 	// Datasets cannot be dragged out of their system
@@ -271,7 +315,7 @@ DataFlowUi.prototype.placeSystem = function(spec, x, y)
 	{
 		var id = (spec.id != null) ? spec.id : catalog.addSystem(spec.props);
 		var cell = DataFlowView.createSystemCell(catalog, id, Math.round(x), Math.round(y));
-		graph.addCell(cell, graph.getDefaultParent());
+		graph.addCell(cell, DataFlowModel.getFlowLayer(graph));
 
 		if (spec.id != null && spec.includeDatasets)
 		{
@@ -375,6 +419,8 @@ DataFlowUi.prototype.cellsRemoved = function(cells)
 	var systems = [];
 	var datasets = [];
 	var actions = [];
+	var tables = [];
+	var relationships = [];
 	var touched = false;
 
 	function collect(cell)
@@ -395,6 +441,14 @@ DataFlowUi.prototype.cellsRemoved = function(cells)
 		{
 			actions.push(id);
 		}
+		else if (type == DataFlowModel.TABLE)
+		{
+			tables.push(id);
+		}
+		else if (type == DataFlowModel.RELATIONSHIP)
+		{
+			relationships.push(id);
+		}
 
 		for (var i = 0; i < graph.model.getChildCount(cell); i++)
 		{
@@ -411,6 +465,23 @@ DataFlowUi.prototype.cellsRemoved = function(cells)
 	{
 		this.update(function(catalog)
 		{
+			// A deleted relationship edge or table deletes its entity (§7.3)
+			for (var i = 0; i < relationships.length; i++)
+			{
+				if (catalog.getRelationship(relationships[i]) != null)
+				{
+					catalog.removeRelationship(relationships[i]);
+				}
+			}
+
+			for (var i = 0; i < tables.length; i++)
+			{
+				if (catalog.getDataset(tables[i]) != null)
+				{
+					catalog.removeDataset(tables[i]);
+				}
+			}
+
 			for (var i = 0; i < actions.length; i++)
 			{
 				if (catalog.getAction(actions[i]) != null &&
@@ -448,7 +519,11 @@ DataFlowUi.prototype.templateDropped = function(template, target, x, y, clicked)
 {
 	var graph = this.graph;
 
-	if (template == DataFlowView.SYSTEM)
+	if (DataFlowModel.getView(graph) == DataFlow.VIEW_MODEL)
+	{
+		this.ui.alert(mxResources.get('dfSwitchToFlow'));
+	}
+	else if (template == DataFlowView.SYSTEM)
 	{
 		this.showSystemDialog(null, x - DataFlow.SYSTEM_WIDTH / 2, y - DataFlow.SYSTEM_HEADER / 2);
 	}
@@ -538,8 +613,11 @@ DataFlowUi.prototype.showDatasetDialog = function(systemCell, index, datasetCell
 	var id = (datasetCell != null) ? DataFlowView.getId(datasetCell) : null;
 	systemCell = (systemCell != null) ? systemCell : DataFlowView.getSystemCell(this.graph, datasetCell);
 
-	return DataFlowDialogs.showDatasetDialog(this.ui, catalog, DataFlowView.getId(systemCell), id,
-		DataFlowView.getDatasetIds(this.graph, systemCell), function(result)
+	// A table in the model view has no system shape
+	var systemId = (systemCell != null) ? DataFlowView.getId(systemCell) : catalog.getDataset(id).system;
+	var exclude = (systemCell != null) ? DataFlowView.getDatasetIds(this.graph, systemCell) : [];
+
+	return DataFlowDialogs.showDatasetDialog(this.ui, catalog, systemId, id, exclude, function(result)
 	{
 		if (id == null)
 		{
@@ -584,6 +662,14 @@ DataFlowUi.prototype.editCell = function(cell)
 	{
 		this.configureAction(cell);
 	}
+	else if (type == DataFlowModel.TABLE)
+	{
+		this.showDatasetDialog(null, null, cell);
+	}
+	else if (type == DataFlowModel.RELATIONSHIP)
+	{
+		this.showRelationshipDialog(null, null, DataFlowView.getId(cell));
+	}
 };
 
 /**
@@ -593,6 +679,7 @@ DataFlowUi.prototype.confirmDeleteEntity = function(cell)
 {
 	var self = this;
 	var type = DataFlowView.getType(cell);
+	type = (type == DataFlowModel.TABLE) ? DataFlowView.DATASET : type;
 	var id = DataFlowView.getId(cell);
 	var catalog = this.getCatalog();
 	var msg = null;
@@ -626,7 +713,25 @@ DataFlowUi.prototype.addPopupMenuItems = function(menu, cell)
 	cell = DataFlowView.getEditCell(graph, cell);
 	var type = DataFlowView.getType(cell);
 
-	if (type != null && graph.isEnabled() && graph.getSelectionCount() <= 1)
+	// The background offers switching the view
+	if (cell == null && graph.isEnabled() && DataFlowCatalog.hasCatalog(graph))
+	{
+		var model = DataFlowModel.getView(graph) == DataFlow.VIEW_MODEL;
+		menu.addSeparator();
+		menu.addItem(mxResources.get((model) ? 'dfShowFlowView' : 'dfShowModelView'), null, function()
+		{
+			self.setView((model) ? DataFlow.VIEW_FLOW : DataFlow.VIEW_MODEL);
+		});
+	}
+	else if (type == DataFlowModel.RELATIONSHIP && graph.isEnabled())
+	{
+		menu.addSeparator();
+		menu.addItem(mxResources.get('dfChangeCardinality') + '...', null, function()
+		{
+			self.editCell(cell);
+		});
+	}
+	else if (type != null && graph.isEnabled() && graph.getSelectionCount() <= 1)
 	{
 		menu.addSeparator();
 
@@ -729,6 +834,17 @@ DataFlowUi.prototype.getDeleteImpactMessage = function(cells)
 		deleted = deleted.concat(model.filterDescendants(function() { return true; }, cells[i]));
 	}
 
+	// Deleting a table deletes its dataset everywhere (§7.3)
+	var tables = deleted.filter(function(cell)
+	{
+		return DataFlowView.getType(cell) == DataFlowModel.TABLE;
+	});
+
+	if (tables.length > 0)
+	{
+		return mxResources.get('dfDeleteTablesConfirm', [tables.length]);
+	}
+
 	var entities = deleted.filter(function(cell)
 	{
 		var type = DataFlowView.getType(cell);
@@ -811,7 +927,7 @@ DataFlowUi.prototype.placeAction = function(type, x, y)
 	{
 		var id = catalog.addAction(type);
 		var cell = DataFlowView.createActionCell(catalog, id, Math.round(x), Math.round(y));
-		graph.addCell(cell, graph.getDefaultParent());
+		graph.addCell(cell, DataFlowModel.getFlowLayer(graph));
 
 		return cell;
 	});
@@ -1200,6 +1316,239 @@ DataFlowUi.prototype.updateFocus = function()
 };
 
 /**
+ * Switches the current page to the flow or model view (§7.1).
+ */
+DataFlowUi.prototype.setView = function(view)
+{
+	var graph = this.graph;
+	var lineage = DataFlowModel.isLineageShown(graph);
+
+	graph.clearSelection();
+	this.update(function(catalog)
+	{
+		DataFlowModel.applyView(graph, catalog, view, lineage);
+	});
+	this.refreshViewBar();
+
+	// Brings the shapes of the shown view into sight
+	var layer = DataFlowModel.getLayer(graph, view);
+	var bounds = (layer != null) ? graph.view.getBounds(graph.model.getChildCells(layer)) : null;
+
+	if (bounds != null)
+	{
+		graph.scrollRectToVisible(new mxRectangle(bounds.x, bounds.y,
+			Math.min(bounds.width, graph.container.clientWidth),
+			Math.min(bounds.height, graph.container.clientHeight)));
+	}
+};
+
+/**
+ * Shows or hides lineage in the model view.
+ */
+DataFlowUi.prototype.setLineageShown = function(shown)
+{
+	var graph = this.graph;
+	var view = DataFlowModel.getView(graph);
+
+	this.update(function(catalog)
+	{
+		DataFlowModel.applyView(graph, catalog, view, shown);
+	});
+	this.refreshViewBar();
+};
+
+/**
+ * Lays out the model view again.
+ */
+DataFlowUi.prototype.arrangeModel = function()
+{
+	var graph = this.graph;
+
+	this.update(function(catalog)
+	{
+		DataFlowModel.arrange(graph, catalog);
+	});
+};
+
+/**
+ * Adds a relationship drawn between two attribute rows of the model view.
+ */
+DataFlowUi.prototype.addRelationship = function(from, to, cardinality)
+{
+	return this.update(function(catalog)
+	{
+		return catalog.addRelationship(from, to, cardinality);
+	});
+};
+
+/**
+ * Changes the cardinality of a relationship.
+ */
+DataFlowUi.prototype.setCardinality = function(id, cardinality)
+{
+	this.update(function(catalog)
+	{
+		catalog.setCardinality(id, cardinality);
+	});
+};
+
+/**
+ * Opens the cardinality picker: for a new relationship between the given
+ * columns, or for the given relationship.
+ */
+DataFlowUi.prototype.showRelationshipDialog = function(source, target, relationshipId)
+{
+	var self = this;
+	var catalog = this.getCatalog();
+	var rel = (relationshipId != null) ? catalog.getRelationship(relationshipId) : null;
+	var from = (rel != null) ? rel.from : DataFlowView.getId(source);
+	var to = (rel != null) ? rel.to : DataFlowView.getId(target);
+
+	if (catalog.getAttribute(from) == null || catalog.getAttribute(to) == null)
+	{
+		return null;
+	}
+
+	return DataFlowDialogs.showCardinalityDialog(this.ui, catalog, from, to,
+		(rel != null) ? rel.cardinality : null, function(cardinality)
+	{
+		if (rel != null)
+		{
+			self.setCardinality(relationshipId, cardinality);
+		}
+		else
+		{
+			self.addRelationship(from, to, cardinality);
+		}
+	});
+};
+
+/**
+ * Creates the Flow | Model switch shown over the canvas of pages with a
+ * data flow (§7.1), with Show lineage and Re-arrange in the model view.
+ */
+DataFlowUi.prototype.createViewBar = function()
+{
+	var self = this;
+	var ui = this.ui;
+	var bar = document.createElement('div');
+	bar.className = 'geDataFlowViewBar';
+	bar.setAttribute('role', 'group');
+	bar.setAttribute('aria-label', mxResources.get('dfViewSwitcher'));
+
+	function button(key, fn)
+	{
+		var btn = document.createElement('button');
+		btn.setAttribute('type', 'button');
+		btn.className = 'geDataFlowViewBtn';
+		mxUtils.write(btn, mxResources.get(key));
+		mxEvent.addListener(btn, 'click', fn);
+		bar.appendChild(btn);
+
+		return btn;
+	};
+
+	this.flowButton = button('dfFlowView', function()
+	{
+		self.setView(DataFlow.VIEW_FLOW);
+	});
+
+	this.modelButton = button('dfModelView', function()
+	{
+		self.setView(DataFlow.VIEW_MODEL);
+	});
+
+	var label = document.createElement('label');
+	label.className = 'geDataFlowViewCheck';
+	this.lineageBox = document.createElement('input');
+	this.lineageBox.setAttribute('type', 'checkbox');
+	label.appendChild(this.lineageBox);
+	mxUtils.write(label, mxResources.get('dfShowLineage'));
+	bar.appendChild(label);
+	this.lineageLabel = label;
+
+	mxEvent.addListener(this.lineageBox, 'change', function()
+	{
+		self.setLineageShown(self.lineageBox.checked);
+	});
+
+	this.arrangeButton = button('dfRearrange', function()
+	{
+		self.arrangeModel();
+	});
+	this.arrangeButton.classList.add('geDataFlowViewAction');
+
+	mxEvent.disableContextMenu(bar);
+	this.viewBar = bar;
+
+	if (ui.diagramContainer != null && ui.diagramContainer.parentNode != null)
+	{
+		ui.diagramContainer.parentNode.appendChild(bar);
+	}
+
+	// Follows the canvas when the editor layout changes
+	var uiRefresh = ui.refresh;
+
+	ui.refresh = function()
+	{
+		uiRefresh.apply(this, arguments);
+		self.refreshViewBar();
+	};
+
+	ui.editor.addListener('pageSelected', function()
+	{
+		self.refreshViewBar();
+	});
+
+	this.graph.model.addListener(mxEvent.CHANGE, function()
+	{
+		self.refreshViewBar();
+	});
+
+	mxEvent.addListener(window, 'resize', function()
+	{
+		self.refreshViewBar();
+	});
+
+	this.refreshViewBar();
+};
+
+/**
+ * Shows the view switch on pages with a data flow, reflects the current
+ * view and centres it over the canvas.
+ */
+DataFlowUi.prototype.refreshViewBar = function()
+{
+	var bar = this.viewBar;
+	var graph = this.graph;
+	var container = this.ui.diagramContainer;
+
+	if (bar == null)
+	{
+		return;
+	}
+
+	var shown = graph.isEnabled() && !this.ui.editor.chromeless && DataFlowCatalog.hasCatalog(graph);
+	bar.style.display = (shown) ? '' : 'none';
+
+	if (shown)
+	{
+		var model = DataFlowModel.getView(graph) == DataFlow.VIEW_MODEL;
+		this.flowButton.setAttribute('aria-pressed', String(!model));
+		this.modelButton.setAttribute('aria-pressed', String(model));
+		this.lineageLabel.style.display = (model) ? '' : 'none';
+		this.arrangeButton.style.display = (model) ? '' : 'none';
+		this.lineageBox.checked = DataFlowModel.isLineageShown(graph);
+
+		if (container != null)
+		{
+			bar.style.left = Math.round(container.offsetLeft + (container.offsetWidth - bar.offsetWidth) / 2) + 'px';
+			bar.style.top = (container.offsetTop + 10) + 'px';
+		}
+	}
+};
+
+/**
  * Returns a palette template: a system with one dataset, or a dataset.
  */
 DataFlowUi.createTemplate = function(type)
@@ -1259,6 +1608,7 @@ DataFlowUi.createTemplate = function(type)
 	{
 		editorUiInit.apply(this, arguments);
 		this.dataFlow = new DataFlowUi(this);
+		this.dataFlow.createViewBar();
 	};
 
 	// Context menu items

@@ -343,6 +343,7 @@ mxscript(drawDevUrl + 'js/diagramly/Simple.js');
 mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlow.js');
 mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlowCatalog.js');
 mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlowStreams.js');
+mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlowModel.js');
 mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlowView.js');
 mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlowDialogs.js');
 mxscript(drawDevUrl + 'js/diagramly/dataflow/DataFlowUi.js');

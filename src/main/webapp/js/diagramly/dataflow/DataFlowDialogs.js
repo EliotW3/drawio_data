@@ -1072,3 +1072,40 @@ DataFlowDialogs.showAdditionDialog = function(ui, catalog, stream, second, secon
 
 	return dlg;
 };
+
+/**
+ * Cardinality picker for a relationship between two attributes (§7.3).
+ * The current cardinality (or null for a new relationship) is preselected.
+ * The callback receives the chosen cardinality.
+ */
+DataFlowDialogs.showCardinalityDialog = function(ui, catalog, from, to, current, fn)
+{
+	function describe(id)
+	{
+		var attribute = catalog.getAttribute(id);
+
+		return catalog.getDataset(attribute.dataset).name + '.' + attribute.name;
+	};
+
+	var div = DataFlowDialogs.createActionDialog(mxResources.get((current != null) ?
+		'dfChangeCardinality' : 'dfAddRelationship'),
+		mxResources.get('dfRelationshipHint', [describe(from), describe(to)]));
+	var section = DataFlowDialogs.addSection(div);
+	var keys = {'1:1': 'dfCard11', '1:N': 'dfCard1N', 'N:1': 'dfCardN1', 'N:M': 'dfCardNM'};
+	var select = DataFlowDialogs.createSelect(DataFlow.CARDINALITIES.map(function(c)
+	{
+		return [c, mxResources.get(keys[c])];
+	}));
+	select.value = (current != null) ? current : '1:N';
+	DataFlowDialogs.addRow(section, mxResources.get('dfCardinality'), select);
+
+	var dlg = DataFlowDialogs.show(ui, div, mxResources.get((current != null) ? 'apply' : 'add'), function()
+	{
+		ui.hideDialog();
+		fn(select.value);
+	}, select);
+
+	dlg.fields = {select: select};
+
+	return dlg;
+};

@@ -1,6 +1,6 @@
 # Data Flow Diagrams: Design Spec
 
-> Status: **agreed 2026-10-18**. Phases 1 (catalog, CHG-003), 2 (systems and datasets, CHG-004) and 3 (actions, CHG-005) are implemented. What exists is described in [ARCHITECTURE.md §20](ARCHITECTURE.md#20-data-flow-diagrams-fork-feature-in-progress). Implementation is tracked as CHG entries in [CHANGES.md](CHANGES.md), one per phase ([§11](#11-phases)), and the finished feature gets its own section in [ARCHITECTURE.md](ARCHITECTURE.md).
+> Status: **agreed 2026-10-18**. Phases 1 (catalog, CHG-003), 2 (systems and datasets, CHG-004), 3 (actions, CHG-005) and 4 (model view, CHG-006) are implemented. What exists is described in [ARCHITECTURE.md §20](ARCHITECTURE.md#20-data-flow-diagrams-fork-feature-in-progress). Implementation is tracked as CHG entries in [CHANGES.md](CHANGES.md), one per phase ([§11](#11-phases)), and the finished feature gets its own section in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 1. Goal
 
@@ -209,23 +209,23 @@ Suppose an Export's source dataset loses an attribute, or the connection feeding
 
 ### 7.1 Toggling
 
-- **Control:** a **Flow | Model** segmented control appears in the toolbar when the page contains data-flow shapes. It is also under *View → Data Flow View* and has a shortcut.
+- **Control:** a **Flow | Model** segmented control appears in the toolbar when the page contains data-flow shapes. It is also under *View → Data Flow View* and has a shortcut. *As built:* the switch floats centred over the canvas, because draw.io's toolbar differs per UI theme. The background context menu offers *Show Model View* / *Show Flow View*. There's no View-menu entry or shortcut yet.
 - **Layers:** the page gets two layers, **Flow** and **Model**. The toggle shows one and hides the other, and the hidden layer is locked. This is the "same canvas" swap (D15).
 - **Viewer and export:** both use the same layers, so the viewer's layers button can switch views, and export draws whichever view is showing.
 - **Remembered view:** the last view is stored on the page (`dfView` on the root) and restored on open.
 
 ### 7.2 What is drawn
 
-- **Tables:** one table per dataset in the catalog (D13). The header shows the dataset name with the system in small type and a colour stripe per system. Each attribute is a row; rows that are the target of lineage show a small "derived" glyph.
+- **Tables:** one table per dataset in the catalog (D13). The header shows the dataset name with the system in small type, and is coloured per system (decision F: a palette of six, by the order systems were added). Each attribute is a row; rows that are the target of lineage show a small "derived" glyph (↳), with the source in the tooltip.
 - **Relationship edges** run row-to-row with ER (crow's-foot) markers for cardinality:
   - 1:1 → `ERmandOne`/`ERmandOne`
   - 1:N → `ERmandOne`/`ERmany`
   - N:M → `ERmany`/`ERmany`
   - Edges created by an Addition are labelled with the action. Manual ones are not.
-- **Lineage edges** are dashed and grey, with a *Show lineage* check box on the control (default on).
+- **Lineage edges** are dashed and grey, with a *Show lineage* check box on the control (default on). Decision E: **one edge per pair of datasets**, labelled with the number of attributes copied ("3 attributes"), not one edge per attribute.
 - **Positions:**
-  - The first time the model view is shown, the tables are auto-laid out (draw.io's hierarchical layout).
-  - After that, positions are kept: switching views only adds tables for new datasets (placed by layout near related tables), removes tables for deleted ones, and refreshes rows and edges.
+  - The first time the model view is shown, the tables are auto-laid out. *As built:* a deterministic column layout instead of draw.io's hierarchical layout: originals in the first column, their copies in the next, and so on, grouped by system.
+  - After that, positions are kept: switching views only adds tables for new datasets (placed by layout near related tables), removes tables for deleted ones, and refreshes rows and edges. *As built:* this happens on every change, not only when switching, so the model is always current.
   - *Re-arrange* in the control's menu runs the layout again.
 
 ### 7.3 Editing in the model view
@@ -240,6 +240,8 @@ Suppose an Export's source dataset loses an attribute, or the connection feeding
 | Delete a table | Confirm dialog: "Delete dataset *X* everywhere?" (D17) |
 
 Lineage edges are read-only.
+
+*As built:* drawing from a row to a row doesn't insert an edge. The picker opens, and the relationship is drawn from the catalog. Rows and relationship edges can't be dragged loose. Systems, datasets and actions are added in the flow view only; the palette asks to switch back.
 
 ## 8. Deleting things
 

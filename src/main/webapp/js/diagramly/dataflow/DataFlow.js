@@ -152,6 +152,47 @@ DataFlow.FLOW_ROLE_STYLES = {
 };
 
 /**
+ * Model view (docs/DATAFLOW.md §7): layers, table colours per system
+ * (decision F), sizes and styles. Lineage is one edge per pair of datasets,
+ * labelled with the number of attributes (decision E).
+ */
+DataFlow.VIEW_FLOW = 'flow';
+DataFlow.VIEW_MODEL = 'model';
+DataFlow.VIEW_ATTRIBUTE = 'dfView';
+
+DataFlow.SYSTEM_PALETTE = ['#1D4ED8', '#0F766E', '#BE185D', '#4D7C0F', '#6D28D9', '#B45309'];
+DataFlow.COLORS.relationship = '#334155';
+DataFlow.COLORS.lineage = '#94A3B8';
+
+DataFlow.TABLE_WIDTH = 200;
+DataFlow.TABLE_HEADER = 30;
+DataFlow.TABLE_GAP_X = 120;
+DataFlow.TABLE_GAP_Y = 40;
+
+DataFlow.TABLE_STYLE = 'swimlane;dataflow=table;html=1;whiteSpace=wrap;startSize=' +
+	DataFlow.TABLE_HEADER + ';childLayout=stackLayout;horizontalStack=0;resizeParent=1;' +
+	'resizeParentMax=0;resizeLast=0;collapsible=0;rounded=1;arcSize=4;absoluteArcSize=1;' +
+	'shadow=1;swimlaneLine=0;swimlaneFillColor=#FFFFFF;strokeColor=' +
+	DataFlow.COLORS.systemBorder + ';fontColor=#FFFFFF;fontSize=12;align=left;' +
+	'verticalAlign=middle;spacingLeft=10;spacingRight=10;editable=0;rotatable=0;';
+
+DataFlow.COLUMN_STYLE = 'text;dataflow=column;html=1;whiteSpace=wrap;align=left;' +
+	'verticalAlign=middle;spacingLeft=10;spacingRight=8;fontSize=11;fontColor=' +
+	DataFlow.COLORS.attributeText + ';strokeColor=none;points=[[0,0.5],[1,0.5]];' +
+	'portConstraint=eastwest;movable=0;resizable=0;deletable=0;editable=0;rotatable=0;' +
+	'cloneable=0;';
+
+DataFlow.RELATIONSHIP_STYLE = 'dataflow=relationship;html=1;edgeStyle=entityRelationEdgeStyle;' +
+	'strokeWidth=1.5;strokeColor=' + DataFlow.COLORS.relationship + ';startFill=0;endFill=0;' +
+	'fontSize=10;fontStyle=1;fontColor=' + DataFlow.COLORS.relationship + ';' +
+	'labelBackgroundColor=#FFFFFF;editable=0;movable=0;';
+
+DataFlow.LINEAGE_STYLE = 'dataflow=lineage;html=1;edgeStyle=orthogonalEdgeStyle;rounded=1;' +
+	'dashed=1;dashPattern=4 3;strokeWidth=1;strokeColor=' + DataFlow.COLORS.lineage +
+	';endArrow=open;endFill=0;fontSize=9;fontColor=#64748B;labelBackgroundColor=#FFFFFF;' +
+	'editable=0;deletable=0;movable=0;bendable=0;';
+
+/**
  * Returns true if the given value is a valid entity ID.
  */
 DataFlow.isValidId = function(id)

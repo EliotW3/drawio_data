@@ -626,6 +626,7 @@ OUTPUT FILES (in src/main/webapp/js/):
 				<file name="DataFlow.js" />
 				<file name="DataFlowCatalog.js" />
 				<file name="DataFlowStreams.js" />
+				<file name="DataFlowModel.js" />
 				<file name="DataFlowView.js" />
 				<file name="DataFlowDialogs.js" />
 				<file name="DataFlowUi.js" />

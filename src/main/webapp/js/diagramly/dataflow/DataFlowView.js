@@ -70,20 +70,21 @@ DataFlowView.getSystemCell = function(graph, cell)
 };
 
 /**
- * Returns the cell to edit for the given cell: the dataset for an attribute
- * row, otherwise the system, dataset or action itself, or null.
+ * Returns the cell to edit for the given cell: the dataset (or table) for an
+ * attribute row (or column), otherwise the system, dataset, action, table
+ * or relationship itself, or null.
  */
 DataFlowView.getEditCell = function(graph, cell)
 {
 	var type = DataFlowView.getType(cell);
 
-	if (type == DataFlowView.ATTRIBUTE)
+	if (type == DataFlowView.ATTRIBUTE || type == 'column')
 	{
 		return graph.model.getParent(cell);
 	}
 
 	return (type == DataFlowView.SYSTEM || type == DataFlowView.DATASET ||
-		type == DataFlowView.ACTION) ? cell : null;
+		type == DataFlowView.ACTION || type == 'table' || type == 'relationship') ? cell : null;
 };
 
 /**
@@ -642,6 +643,9 @@ DataFlowView.sync = function(graph, catalog)
 				}
 			}
 		}
+
+		// The model view, once it exists (§7)
+		DataFlowModel.sync(graph, catalog);
 	}
 	finally
 	{
