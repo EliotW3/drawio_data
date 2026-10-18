@@ -2,24 +2,72 @@
 
 A fork of [draw.io](https://github.com/jgraph/drawio) with **data flow diagrams**: systems, datasets and their attributes, actions that move data between them (Export, Filter, Validation, Addition), and a model view of how the datasets relate. The design is in [docs/DATAFLOW.md](docs/DATAFLOW.md). How the code works is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and every change from upstream is in [docs/CHANGES.md](docs/CHANGES.md).
 
-## Use it
+There are two ways to use drawio_data: in your web browser from a local copy of this repository (any operating system), or as an installed Windows application. Both are the same editor with the same features, and both work offline once set up.
 
-**Windows app.** Download the installer from this repository's **Releases** page and run it. See [desktop/README.md](desktop/README.md) for details, including the SmartScreen warning for the unsigned installer.
+## Option 1: run it in your browser (localhost)
 
-**In a browser, from a clone.** No build step is needed; any static web server works:
+### What you need
+
+- **The repository**, in either of these ways:
+  - with Git: `git clone https://github.com/EliotW3/drawio_data.git`;
+  - without Git: on the repository page choose **Code → Download ZIP**, then extract it.
+- **A small local web server.** Any one of these works:
+  - **Python 3.** It is preinstalled on macOS and Linux. On Windows, install it from [python.org](https://www.python.org/downloads/) or the Microsoft Store.
+  - **Node.js** (from [nodejs.org](https://nodejs.org/)).
+
+### Start it
+
+Open a terminal (on Windows: PowerShell) in the repository folder and run one of these:
 
 ```sh
-git clone https://github.com/EliotW3/drawio_data.git
-cd drawio_data
+# Python on macOS or Linux
 python3 -m http.server 8080 --bind 127.0.0.1 --directory src/main/webapp
+
+# Python on Windows
+py -m http.server 8080 --bind 127.0.0.1 --directory src/main/webapp
+
+# Node.js on any system
+npx http-server src/main/webapp -p 8080 -a 127.0.0.1
 ```
 
-Then open http://127.0.0.1:8080/. Opening `index.html` directly from disk doesn't work. Diagrams are saved to your computer or the browser. The cloud storage options (Google Drive, OneDrive, GitHub, …) need sign-in credentials that this repository doesn't include.
+Then open **http://127.0.0.1:8080/** in your browser. Keep the terminal open while you work. To stop the server, press `Ctrl+C` in it.
 
-**Developing.**
-- Use `?dev=1` to run the source files instead of the bundles.
-- Rebuild the bundles with `cd etc/build && ant`. This needs a JDK and Apache Ant.
-- Run the data flow tests in `etc/test/dataflow` with `npm install` and then `node run.js`. This needs Firefox.
+### Good to know
+
+- **Where diagrams are saved.** Choose *Device* to save `.drawio` files on your computer, or *Browser* to keep them in this browser. Google Drive, OneDrive, Dropbox, GitHub and GitLab are not available, because they need sign-in credentials that this repository doesn't include.
+- **Port already in use.** If port 8080 is taken, use another number, such as `8081`, in both the command and the address.
+- **Use a web server.** Opening `src/main/webapp/index.html` directly from disk doesn't work; browsers block the app from loading its files that way.
+- **Updating.** Run `git pull` (or download the ZIP again) and reload the page.
+
+## Option 2: install it as a Windows application
+
+### Install
+
+1. Open this repository's **Releases** page and download `drawio-data-<version>-windows-installer.exe`.
+2. Run it. The installer isn't code-signed, so Windows SmartScreen may show "Windows protected your PC". Choose **More info**, then **Run anyway**.
+3. Choose where to install. The default folder needs no administrator rights.
+4. On the **Diagram files** page, choose whether drawio-data should open `.drawio` files when you double-click them:
+   - **Leave it unchecked if you already use draw.io.** `.drawio` files keep opening in draw.io. If draw.io (or another app) already opens `.drawio` files, the box starts unchecked.
+   - **Check it** to make drawio-data the app for `.drawio` files.
+   - Either way, drawio-data appears under **right-click → Open with** for `.drawio` files.
+5. Finish. The app starts, and the installer adds a Start menu entry and a desktop shortcut called **drawio-data**.
+
+### Using it next to draw.io
+
+drawio-data is installed **on its own**. It doesn't install, change or replace draw.io: the two have separate programs, settings and recent-file lists, and both can be open at the same time. The only shared thing is the `.drawio` file type, which is yours to choose in step 4.
+
+### Update and uninstall
+
+- **Updating.** The app doesn't update itself. To update, download the newer installer and run it; your settings are kept.
+- **Uninstalling.** Go to **Settings → Apps → Installed apps → drawio-data → Uninstall**. If drawio-data opened `.drawio` files, that is removed too; another app's setting is never touched.
+
+Building the installer yourself is described in [desktop/README.md](desktop/README.md).
+
+## Developing
+
+- **Run the sources.** Add `?dev=1` to the address to run the source files instead of the bundles. No build step is needed.
+- **Rebuild the bundles** with `cd etc/build && ant` (needs a JDK and Apache Ant) before committing or building the desktop app.
+- **Run the data flow tests** in `etc/test/dataflow` with `npm install`, then `node run.js` (needs Firefox and a running server, see Option 1).
 
 The rest of this README is upstream draw.io's.
 

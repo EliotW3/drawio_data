@@ -13,8 +13,15 @@ on your computer.
    installer as an artifact.
 2. Run it. The installer isn't code-signed, so Windows SmartScreen may say
    "Windows protected your PC". Choose **More info**, then **Run anyway**.
-3. Choose a folder (the default needs no administrator rights). The installer
-   adds Start menu and desktop shortcuts and opens `.drawio` files with the app.
+3. Choose a folder (the default needs no administrator rights).
+4. On the **Diagram files** page, choose whether drawio-data opens `.drawio`
+   files. The box starts unchecked when another application, such as draw.io,
+   already opens them, so an existing draw.io keeps working as before.
+   drawio-data is added to **Open with** either way.
+5. The installer adds Start menu and desktop shortcuts.
+
+drawio-data installs **on its own, next to draw.io**: it doesn't install,
+change or replace draw.io, and the two keep separate settings.
 
 The app does not update itself. Install a newer release over the old one to
 update; your settings are kept.
@@ -60,10 +67,14 @@ version that matches this repository's web app. Changes:
   web app recognises the desktop app by it, and Electron would otherwise only
   add `drawio-data/<version>`.
 - **Help link.** *Help → Report issue* opens this repository's issues.
-- **Build.** Windows only: an NSIS installer per user, unsigned, associated
-  with `.drawio`. No MSI, macOS, Linux or Store builds, no code signing, no
-  release upload from the build (the GitHub workflow publishes releases).
-  The update-channel test was removed with the updates.
+- **Build.** Windows only: an NSIS installer per user, unsigned. Instead of
+  electron-builder's file association, [build/installer.nsh](build/installer.nsh)
+  adds a *Diagram files* page. On it, opening `.drawio` files is optional and
+  unchecked when another application already opens them. drawio-data is always
+  registered under *Open with*, and uninstalling restores only what it
+  changed. No MSI, macOS, Linux or Store builds, no code signing, no release
+  upload from the build (the GitHub workflow publishes releases). The
+  update-channel test was removed with the updates.
 
 ## Licence
 

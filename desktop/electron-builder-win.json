@@ -29,7 +29,9 @@
     "target": [
       {
         "target": "nsis",
-        "arch": ["x64"]
+        "arch": [
+          "x64"
+        ]
       }
     ]
   },
@@ -41,16 +43,8 @@
     "runAfterFinish": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "shortcutName": "drawio-data"
+    "shortcutName": "drawio-data",
+    "include": "build/installer.nsh"
   },
-  "afterPack": "build/fuses.mjs",
-  "fileAssociations": [
-    {
-      "ext": "drawio",
-      "name": "draw.io Diagram",
-      "description": "draw.io Diagram",
-      "mimeType": "application/vnd.jgraph.mxfile",
-      "role": "Editor"
-    }
-  ]
+  "afterPack": "build/fuses.mjs"
 }

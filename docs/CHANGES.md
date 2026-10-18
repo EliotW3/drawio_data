@@ -6,7 +6,7 @@ The upstream release log is [ChangeLog](../ChangeLog) in the repository root. Do
 
 ## How to record a change
 
-- Add a new entry at the **top** of [Change entries](#change-entries) with the next ID (`CHG-010`, `CHG-011`, …), and add a row to the [Change index](#change-index).
+- Add a new entry at the **top** of [Change entries](#change-entries) with the next ID (`CHG-011`, `CHG-012`, …), and add a row to the [Change index](#change-index).
 - Fill in every heading of the template below. Write "None" rather than deleting a heading.
 - Reference [ARCHITECTURE.md](ARCHITECTURE.md) sections by number (e.g. "§12.2") and update those sections in the same change, so that the architecture guide always describes the current code.
 - List anything left unfinished under **Follow-ups**, and keep [Open follow-ups](#open-follow-ups) in sync until the item is resolved.
@@ -35,6 +35,7 @@ The upstream release log is [ChangeLog](../ChangeLog) in the repository root. Do
 
 | ID | Date | Title | Status |
 |---|---|---|---|
+| [CHG-010](#chg-010--installer-option-for-drawio-files-usage-instructions) | 2026-10-18 | Installer option for .drawio files; usage instructions | Done |
 | [CHG-009](#chg-009--windows-desktop-app) | 2026-10-18 | Windows desktop app | Done, follow-ups pending |
 | [CHG-008](#chg-008--data-flow-cardinalities-use-m-for-many) | 2026-10-18 | Data flow cardinalities use M for "many" | Done |
 | [CHG-007](#chg-007--data-flow-diagrams-phase-5-copy-and-paste-performance) | 2026-10-18 | Data flow diagrams, phase 5: copy and paste, performance | Done |
@@ -59,6 +60,52 @@ The upstream release log is [ChangeLog](../ChangeLog) in the repository root. Do
 ---
 
 ## Change entries
+
+### CHG-010 — Installer option for .drawio files; usage instructions
+
+- **Date:** 2026-10-18
+- **Status:** Done
+- **ARCHITECTURE.md sections affected:** §21.1
+
+**Motivation**
+
+People who already have draw.io should be able to install drawio-data without it taking over draw.io. The app was already separate (own folder, app ID and settings), but the installer made itself the default app for `.drawio` files without asking. The README also needed step-by-step instructions for both ways of running the fork.
+
+**What changed for users**
+
+| Feature | Before | After |
+|---|---|---|
+| `.drawio` files | The installer always made drawio-data their default app | A *Diagram files* page asks. The box starts unchecked when another app (such as draw.io) already opens them. drawio-data is always offered under *Open with*. |
+| Uninstall | Removed electron-builder's association | Removes only what drawio-data added, and gives `.drawio` back only if drawio-data was its default |
+| README | Short "Use it" section | Step-by-step guides: *Option 1: run it in your browser (localhost)* for Windows, macOS and Linux, with Git or ZIP, Python or Node; and *Option 2: install it as a Windows application* (SmartScreen, the file option, using it next to draw.io, update, uninstall); plus *Developing* |
+
+**What changed in the code**
+
+| File | Change |
+|---|---|
+| `desktop/build/installer.nsh` | **New.** NSIS additions through electron-builder's hooks: `customInit` (default of the option), `customPageAfterChangeDir` (the page), `customInstall` (ProgID, *Open with*, optional default) and `customUnInstall`. |
+| `desktop/electron-builder-win.json` | `nsis.include` added; `fileAssociations` removed (the script handles them). |
+| [README.md](../README.md), [desktop/README.md](../desktop/README.md) | Usage instructions as above. |
+
+**Impact on the codebase**
+
+- **Registry.** The installer writes only under the user's `Software\Classes` (per-user install): the `drawio-data.drawio` ProgID, its *Open with* entry, and the `.drawio` default only when chosen.
+- **Silent installs** (`/S`) use the default: drawio-data opens `.drawio` files only if no other app does.
+
+**Verification**
+
+- `npm run dist-win` builds the installer, so the script compiles in the real installer.
+- The same `installer.nsh` was compiled into a test installer and uninstaller with electron-builder's NSIS and run under Wine. It passed five cases:
+  - no app for `.drawio`: drawio-data becomes the default, the *Open with* entry and ProgID are written, and the option is checked;
+  - uninstall: everything is removed;
+  - `.drawio` owned by `draw.io.drawio`: the default is unchanged, the *Open with* entry is added, and the option is unchecked;
+  - uninstall: draw.io stays the default;
+  - reinstall over drawio-data: it stays the default.
+- **Not verified:** the full installer doesn't run under Wine. A plain electron-builder installer without these additions stops there too (exit code 2), so it is a Wine limit. Seeing the page and installing on Windows is still the CHG-009 follow-up.
+
+**Follow-ups**
+
+None beyond CHG-009's (try the installer on Windows).
 
 ### CHG-009 — Windows desktop app
 
