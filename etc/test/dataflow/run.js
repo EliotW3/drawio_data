@@ -79,6 +79,13 @@ const filter = process.argv[3] || '';
 			failed += r.ok ? 0 : 1;
 		}
 
+		const notes = await page.evaluate(() => DataFlowTest.notes);
+
+		if (notes.length > 0)
+		{
+			console.log('\nNotes:\n  ' + notes.join('\n  '));
+		}
+
 		if (errors.length > 0)
 		{
 			console.log('Page errors:\n  ' + errors.join('\n  '));

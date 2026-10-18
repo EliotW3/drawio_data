@@ -3,7 +3,15 @@
  * DataFlowTest.test(name, fn), where fn receives the assertion helpers and
  * the EditorUi. Each test starts with a new blank file. A test may return a Promise.
  */
-var DataFlowTest = window.DataFlowTest = {tests: []};
+var DataFlowTest = window.DataFlowTest = {tests: [], notes: []};
+
+/**
+ * Adds a line to the run's notes (printed by run.js), e.g. timings.
+ */
+DataFlowTest.note = function(text)
+{
+	DataFlowTest.notes.push(text);
+};
 
 DataFlowTest.test = function(name, fn)
 {

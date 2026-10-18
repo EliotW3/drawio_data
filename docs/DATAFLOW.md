@@ -1,6 +1,6 @@
 # Data Flow Diagrams: Design Spec
 
-> Status: **agreed 2026-10-18**. Phases 1 (catalog, CHG-003), 2 (systems and datasets, CHG-004), 3 (actions, CHG-005) and 4 (model view, CHG-006) are implemented. What exists is described in [ARCHITECTURE.md §20](ARCHITECTURE.md#20-data-flow-diagrams-fork-feature-in-progress). Implementation is tracked as CHG entries in [CHANGES.md](CHANGES.md), one per phase ([§11](#11-phases)), and the finished feature gets its own section in [ARCHITECTURE.md](ARCHITECTURE.md).
+> Status: **implemented** (2026-10-18), in five phases: CHG-003 (catalog), CHG-004 (systems and datasets), CHG-005 (actions), CHG-006 (model view) and CHG-007 (copy and paste, performance) in [CHANGES.md](CHANGES.md). The code is described in [ARCHITECTURE.md §20](ARCHITECTURE.md#20-data-flow-diagrams-fork-feature). Where the build differs from this design, the section says so in an *As built* note.
 
 ## 1. Goal
 
@@ -309,5 +309,10 @@ Each phase is a separately reviewable change, with its own CHG entry, rebuilt bu
 | **3. Actions** | The four actions, connection rules, streams, the four dialogs, lineage, validation highlighting, needs-setup/needs-attention | A chain such as SAP → Filter → Staging → Validation(ref: CRM) → Addition(+CRM.Customers) → Export → Warehouse can be built, and changing upstream data flags the right actions |
 | **4. Model view** | Layers, toggle, table generation, layout, relationship and lineage edges, model-view editing | Toggle swaps views without losing positions; drawn relationships persist; the cardinality markers are correct |
 | **5. Hardening** | Copy/paste of flow shapes within and across pages and files (the catalog fragment travels with the cells and is merged with new IDs), a performance check (≈50 systems / 500 datasets), docs | ARCHITECTURE section written; all tests pass |
+
+*As built (phase 5):*
+- **Copy and paste:** copied cells carry their catalog fragment in `dfData`, which every paste path keeps (clipboard, libraries, other windows). Pasting imports what the page lacks, with the same IDs, and validates it like a loaded file.
+- **Performance:** at 50 systems / 500 datasets an edit takes about 80 ms, and the first model view about 2.2 s (ARCHITECTURE.md §20.6).
+- **Tests:** 90 in total.
 
 Tests are headless Firefox scripts (as used for CHG-001/002). I propose committing them under `etc/test/dataflow/` with their own `package.json` (puppeteer-core) so they can be re-run.

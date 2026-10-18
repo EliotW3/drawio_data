@@ -41,6 +41,22 @@ DataFlowUi.prototype.init = function()
 		}
 	});
 
+	// Copied cells carry their entities, so paste, cut and paste, and
+	// pasting into another page or file keep them (see cellsAdded)
+	var graphEncodeCells = graph.encodeCells;
+
+	graph.encodeCells = function(cells)
+	{
+		var node = graphEncodeCells.apply(this, arguments);
+
+		if (DataFlowCatalog.hasCatalog(graph))
+		{
+			self.addFragments(node);
+		}
+
+		return node;
+	};
+
 	// Connecting applies the connection rules and updates the action states
 	graph.addListener(mxEvent.CELL_CONNECTED, function(sender, evt)
 	{
@@ -772,30 +788,172 @@ DataFlowUi.prototype.addPopupMenuItems = function(menu, cell)
 };
 
 /**
- * Gives copied action shapes (paste, duplicate, Ctrl+drag) a new, empty
- * action: an action has exactly one shape.
+ * Adds the catalog fragment of every data flow cell in the given encoded
+ * cells (dfData, see DataFlowCatalog.extract): systems, datasets with
+ * their attributes and system, actions and relationships.
+ */
+DataFlowUi.prototype.addFragments = function(node)
+{
+	var catalog = this.getCatalog();
+	var elts = node.getElementsByTagName('*');
+
+	for (var i = 0; i < elts.length; i++)
+	{
+		var type = elts[i].getAttribute('dfType');
+		var id = elts[i].getAttribute('dfId');
+		var ids = null;
+
+		if (type == DataFlowView.SYSTEM)
+		{
+			ids = {systems: [id]};
+		}
+		else if (type == DataFlowView.DATASET || type == DataFlowModel.TABLE)
+		{
+			ids = {datasets: [id]};
+		}
+		else if (type == DataFlowView.ACTION)
+		{
+			ids = {actions: [id]};
+		}
+		else if (type == DataFlowModel.RELATIONSHIP)
+		{
+			ids = {relationships: [id]};
+		}
+
+		if (ids != null)
+		{
+			elts[i].setAttribute('dfData', JSON.stringify(catalog.extract(ids)));
+		}
+	}
+};
+
+/**
+ * Handles added cells (paste, duplicate, Ctrl+drag, library drops):
+ * - imports the entities their dfData carries that this page lacks (cut and
+ *   paste, other pages and files) and removes dfData;
+ * - puts a dataset that landed outside its system into a shape of that
+ *   system, or removes it; removes rows, and model view cells outside the
+ *   model layers;
+ * - gives copies of an action shape their own, new action;
+ * - removes entities that were imported but ended up without shapes.
  */
 DataFlowUi.prototype.cellsAdded = function(cells)
 {
 	var graph = this.graph;
+	var model = graph.model;
 	var added = [];
 
 	for (var i = 0; cells != null && i < cells.length; i++)
 	{
-		added = added.concat(graph.model.filterDescendants(function(cell)
+		added = added.concat(model.filterDescendants(function(cell)
 		{
-			return DataFlowView.getType(cell) == DataFlowView.ACTION;
+			return DataFlowView.getType(cell) != null;
 		}, cells[i]));
 	}
 
-	if (added.length > 0)
+	if (added.length == 0)
 	{
-		this.update(function(catalog)
+		return;
+	}
+
+	this.update(function(catalog)
+	{
+		// Imports and strips the fragments
+		var imported = [];
+
+		for (var i = 0; i < added.length; i++)
 		{
-			for (var i = 0; i < added.length; i++)
+			var cell = added[i];
+			var data = cell.value.getAttribute('dfData');
+
+			if (data != null)
 			{
-				var cell = added[i];
-				var id = DataFlowView.getId(cell);
+				try
+				{
+					imported = imported.concat(catalog.importFragment(JSON.parse(data)));
+				}
+				catch (e)
+				{
+					// Ignores invalid data
+				}
+
+				var value = cell.value.cloneNode(true);
+				value.removeAttribute('dfData');
+				model.setValue(cell, value);
+			}
+		}
+
+		var modelLayers = [DataFlowModel.getLayer(graph, DataFlow.VIEW_MODEL),
+			DataFlowModel.getLayer(graph, DataFlowModel.LINEAGE)];
+		var removed = [];
+
+		function inModel(cell)
+		{
+			var layer = cell;
+
+			while (layer != null && model.getParent(layer) != model.getRoot())
+			{
+				layer = model.getParent(layer);
+			}
+
+			return layer != null && mxUtils.indexOf(modelLayers, layer) >= 0;
+		};
+
+		for (var i = 0; i < added.length; i++)
+		{
+			var cell = added[i];
+			var type = DataFlowView.getType(cell);
+			var id = DataFlowView.getId(cell);
+			var parent = model.getParent(cell);
+
+			if (!model.contains(cell) || mxUtils.indexOf(removed, cell) >= 0)
+			{
+				continue;
+			}
+			else if (type == DataFlowView.ATTRIBUTE)
+			{
+				if (DataFlowView.getType(parent) != DataFlowView.DATASET)
+				{
+					removed.push(cell);
+				}
+			}
+			else if (type == DataFlowModel.TABLE || type == DataFlowModel.COLUMN ||
+				type == DataFlowModel.RELATIONSHIP || type == DataFlowModel.LINEAGE)
+			{
+				if (!inModel(cell))
+				{
+					removed.push(cell);
+				}
+			}
+			else if (type == DataFlowView.DATASET)
+			{
+				var dataset = catalog.getDataset(id);
+
+				if (dataset == null)
+				{
+					removed.push(cell);
+				}
+				else if (DataFlowView.getType(parent) != DataFlowView.SYSTEM ||
+					DataFlowView.getId(parent) != dataset.system)
+				{
+					// Into a shape of its system that does not show it yet
+					var target = DataFlowView.getCells(graph, DataFlowView.SYSTEM, dataset.system).filter(function(sys)
+					{
+						return mxUtils.indexOf(DataFlowView.getDatasetIds(graph, sys), id) < 0;
+					})[0];
+
+					if (target != null)
+					{
+						model.add(target, cell);
+					}
+					else
+					{
+						removed.push(cell);
+					}
+				}
+			}
+			else if (type == DataFlowView.ACTION)
+			{
 				var others = DataFlowView.getCells(graph, DataFlowView.ACTION, id).filter(function(other)
 				{
 					return other != cell;
@@ -803,18 +961,51 @@ DataFlowUi.prototype.cellsAdded = function(cells)
 
 				if (catalog.getAction(id) == null || others.length > 0)
 				{
-					var type = cell.value.getAttribute('dfAction');
+					var actionType = cell.value.getAttribute('dfAction');
 
-					if (DataFlow.ACTIONS[type] != null)
+					if (DataFlow.ACTIONS[actionType] != null)
 					{
 						var value = cell.value.cloneNode(true);
-						value.setAttribute('dfId', catalog.addAction(type));
-						graph.model.setValue(cell, value);
+						value.setAttribute('dfId', catalog.addAction(actionType));
+						model.setValue(cell, value);
+					}
+					else
+					{
+						removed.push(cell);
 					}
 				}
 			}
-		});
-	}
+		}
+
+		DataFlowModel.removeCells(graph, removed);
+
+		// Imported entities that ended up without shapes are not kept (D19)
+		for (var i = 0; i < imported.length; i++)
+		{
+			var id = imported[i];
+
+			if (catalog.getDataset(id) != null && DataFlowView.getCells(graph, DataFlowView.DATASET, id).length == 0 &&
+				DataFlowView.getCells(graph, DataFlowModel.TABLE, id).length == 0)
+			{
+				catalog.removeDataset(id);
+			}
+		}
+
+		for (var i = 0; i < imported.length; i++)
+		{
+			var id = imported[i];
+
+			if (catalog.getSystem(id) != null && DataFlowView.getCells(graph, DataFlowView.SYSTEM, id).length == 0 &&
+				catalog.getDatasetIds(id).length == 0)
+			{
+				catalog.removeSystem(id);
+			}
+			else if (catalog.getAction(id) != null && DataFlowView.getCells(graph, DataFlowView.ACTION, id).length == 0)
+			{
+				catalog.removeAction(id);
+			}
+		}
+	});
 };
 
 /**

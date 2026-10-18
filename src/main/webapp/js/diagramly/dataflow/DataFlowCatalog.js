@@ -1408,3 +1408,141 @@ DataFlowCatalog.prototype.getRemovalImpact = function(kind, id)
 
 	return fn.call(copy, id);
 };
+
+/**
+ * Returns a catalog fragment (plain JSON data) with the given entities, for
+ * copying shapes: {systems, datasets, actions, relationships} list IDs.
+ * Datasets bring their attributes and their system.
+ */
+DataFlowCatalog.prototype.extract = function(ids)
+{
+	var self = this;
+	var out = {version: DataFlow.CATALOG_VERSION, systems: {}, datasets: {},
+		attributes: {}, actions: {}, relationships: {}};
+
+	function copy(value)
+	{
+		return JSON.parse(JSON.stringify(value));
+	};
+
+	function addSystem(id)
+	{
+		if (self.getSystem(id) != null)
+		{
+			out.systems[id] = copy(self.systems[id]);
+		}
+	};
+
+	(ids.systems || []).forEach(addSystem);
+
+	(ids.datasets || []).forEach(function(id)
+	{
+		var dataset = self.getDataset(id);
+
+		if (dataset != null)
+		{
+			out.datasets[id] = copy(dataset);
+			addSystem(dataset.system);
+
+			for (var i = 0; i < dataset.attributes.length; i++)
+			{
+				out.attributes[dataset.attributes[i]] = copy(self.attributes[dataset.attributes[i]]);
+			}
+		}
+	});
+
+	(ids.actions || []).forEach(function(id)
+	{
+		if (self.getAction(id) != null)
+		{
+			out.actions[id] = copy(self.actions[id]);
+		}
+	});
+
+	(ids.relationships || []).forEach(function(id)
+	{
+		if (self.getRelationship(id) != null)
+		{
+			out.relationships[id] = copy(self.relationships[id]);
+		}
+	});
+
+	return out;
+};
+
+/**
+ * Adds the entities of a fragment (see extract) that this catalog does not
+ * have, keeping their IDs: IDs are random, so an existing ID is the same
+ * entity and is left as it is. Attributes are only taken for datasets that
+ * are new here. The result is validated like a loaded catalog, so a hostile
+ * or partial fragment cannot break references. Returns the IDs added.
+ */
+DataFlowCatalog.prototype.importFragment = function(data)
+{
+	var added = [];
+
+	if (!DataFlowCatalog.isObject(data))
+	{
+		return added;
+	}
+
+	var merged = this.toJSON();
+	var maps = ['systems', 'datasets', 'attributes', 'actions', 'relationships'];
+	var target = {version: merged.version};
+
+	for (var i = 0; i < maps.length; i++)
+	{
+		target[maps[i]] = JSON.parse(JSON.stringify(merged[maps[i]]));
+	}
+
+	var newDatasets = DataFlowCatalog.createMap();
+
+	for (var i = 0; i < maps.length; i++)
+	{
+		var map = data[maps[i]];
+
+		if (DataFlowCatalog.isObject(map))
+		{
+			var ids = Object.keys(map);
+
+			for (var j = 0; j < ids.length; j++)
+			{
+				var id = ids[j];
+				var entity = map[id];
+				var exists = this.systems[id] != null || this.datasets[id] != null ||
+					this.attributes[id] != null || this.actions[id] != null ||
+					this.relationships[id] != null;
+
+				if (DataFlowCatalog.isValidId(id) && !exists && DataFlowCatalog.isObject(entity) &&
+					(maps[i] != 'attributes' || newDatasets[entity.dataset] === true))
+				{
+					target[maps[i]][id] = entity;
+					added.push(id);
+
+					if (maps[i] == 'datasets')
+					{
+						newDatasets[id] = true;
+					}
+				}
+			}
+		}
+	}
+
+	if (added.length > 0)
+	{
+		var result = new DataFlowCatalog(target);
+
+		for (var i = 0; i < maps.length; i++)
+		{
+			this[maps[i]] = result[maps[i]];
+		}
+
+		this.warnings = this.warnings.concat(result.warnings);
+	}
+
+	return added.filter(function(id)
+	{
+		return this.systems[id] != null || this.datasets[id] != null || this.attributes[id] != null ||
+			this.actions[id] != null || this.relationships[id] != null;
+	}, this);
+};

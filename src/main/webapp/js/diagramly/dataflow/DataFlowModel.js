@@ -187,7 +187,8 @@ DataFlowModel.applyView = function(graph, catalog, view, showLineage)
 {
 	if (DataFlowModel.ensureLayers(graph))
 	{
-		DataFlowModel.sync(graph, catalog);
+		// Placing each table is skipped, the layout places them all
+		DataFlowModel.sync(graph, catalog, true);
 		DataFlowModel.arrange(graph, catalog);
 	}
 
@@ -404,10 +405,11 @@ DataFlowModel.syncColumns = function(graph, catalog, table, dataset)
 
 /**
  * Brings the model layer in line with the catalog: tables (new ones placed
- * next to a related table), columns, relationships and lineage edges.
- * Does nothing until the model layer exists. Must run inside a transaction.
+ * next to a related table unless noPlacement is true), columns,
+ * relationships and lineage edges. Does nothing until the model layer
+ * exists. Must run inside a transaction.
  */
-DataFlowModel.sync = function(graph, catalog)
+DataFlowModel.sync = function(graph, catalog, noPlacement)
 {
 	var model = graph.model;
 	var layer = DataFlowModel.getLayer(graph, DataFlow.VIEW_MODEL);
@@ -473,7 +475,7 @@ DataFlowModel.sync = function(graph, catalog)
 		DataFlowModel.syncColumns(graph, catalog, table, dataset);
 	}
 
-	for (var i = 0; i < added.length; i++)
+	for (var i = 0; !noPlacement && i < added.length; i++)
 	{
 		DataFlowModel.placeTable(graph, catalog, tables, added[i], added.slice(i));
 	}
