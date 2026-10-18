@@ -54,7 +54,7 @@ DrawioConfigEditor.install = function(container, options)
 	var config = {};
 	var fontLists = { defaultFonts: [], customFonts: [] };
 	var colorLists = { presetColors: [], customPresetColors: [], defaultColors: [] };
-	var tagLists = { enabledLibraries: [], defaultCustomLibraries: [], hideMenuItems: [], hideMenus: [], enabledTemplateSections: [], defaultLanguages: [] };
+	var tagLists = { enabledLibraries: [], defaultCustomLibraries: [], hideMenuItems: [], hideMenus: [], enabledTemplateSections: [] };
 	var schemeData = { defaultColorSchemes: [], customColorSchemes: [] };
 	var invalidFields = {};
 	var editorContext = options.editorContext || {};
@@ -130,8 +130,7 @@ DrawioConfigEditor.install = function(container, options)
 		return null;
 	}
 
-	// Like translate, but shows the key for a missing translation (which
-	// only happens for the dia_i18n preview pseudo-language)
+	// Like translate, but shows the key for a missing resource
 	function resolve(key)
 	{
 		var value = translate(key);
@@ -162,8 +161,8 @@ DrawioConfigEditor.install = function(container, options)
 	// placeholder. The template ships without English texts - dia.txt is
 	// the single source. A field id that collides with a toggle key uses
 	// the 'Field' suffix (probed first - it only exists for collisions).
-	// A missing translation shows the resource key for labels and titles
-	// (only the dia_i18n preview pseudo-language) and hides help texts.
+	// A missing resource shows the resource key for labels and titles
+	// and hides help texts.
 	// See translate() for why this never writes markup.
 	function localizeTemplate()
 	{
@@ -210,10 +209,8 @@ DrawioConfigEditor.install = function(container, options)
 		}
 	}
 
-	// Applies the toggle texts for the current language from the resources
-	// (a missing translation shows the resource key, which only happens for
-	// the dia_i18n preview pseudo-language) - text nodes only, see
-	// translate(). Callable again after a language switch.
+	// Applies the toggle texts from the resources (a missing resource shows
+	// the resource key) - text nodes only, see translate().
 	function localizeToggles()
 	{
 		Object.keys(toggleGroups).forEach(function(containerId)
@@ -1140,7 +1137,7 @@ DrawioConfigEditor.install = function(container, options)
 		config = {};
 		fontLists = { defaultFonts: [], customFonts: [] };
 		colorLists = { presetColors: [], customPresetColors: [], defaultColors: [] };
-		tagLists = { enabledLibraries: [], defaultCustomLibraries: [], hideMenuItems: [], hideMenus: [], enabledTemplateSections: [], defaultLanguages: [] };
+		tagLists = { enabledLibraries: [], defaultCustomLibraries: [], hideMenuItems: [], hideMenus: [], enabledTemplateSections: [] };
 		schemeData = { defaultColorSchemes: [], customColorSchemes: [] };
 
 		Object.keys(obj).forEach(function(key)
@@ -1176,7 +1173,7 @@ DrawioConfigEditor.install = function(container, options)
 				return;
 			}
 
-			if (key === 'enabledLibraries' || key === 'defaultCustomLibraries' || key === 'hideMenuItems' || key === 'hideMenus' || key === 'enabledTemplateSections' || key === 'defaultLanguages')
+			if (key === 'enabledLibraries' || key === 'defaultCustomLibraries' || key === 'hideMenuItems' || key === 'hideMenus' || key === 'enabledTemplateSections')
 			{
 				if (Array.isArray(val)) { tagLists[key] = val.map(function(v) { return String(v); }); config[key] = val; }
 				return;
@@ -1268,7 +1265,7 @@ DrawioConfigEditor.install = function(container, options)
 
 		['defaultFonts', 'customFonts'].forEach(renderFontTags);
 		['presetColors', 'customPresetColors', 'defaultColors'].forEach(renderColorSwatches);
-		['enabledLibraries', 'defaultCustomLibraries', 'hideMenuItems', 'hideMenus', 'enabledTemplateSections', 'defaultLanguages'].forEach(renderTagList);
+		['enabledLibraries', 'defaultCustomLibraries', 'hideMenuItems', 'hideMenus', 'enabledTemplateSections'].forEach(renderTagList);
 		['defaultColorSchemes', 'customColorSchemes'].forEach(renderSchemeEditor);
 
 		macroParamPrefixes.forEach(populateMacroParams);
@@ -1514,7 +1511,6 @@ DrawioConfigEditor.install = function(container, options)
 	setupTagList('hideMenuItems');
 	setupTagList('hideMenus');
 	setupTagList('enabledTemplateSections');
-	setupTagList('defaultLanguages');
 	setupSchemeEditor('defaultColorSchemes');
 	setupSchemeEditor('customColorSchemes');
 	macroParamPrefixes.forEach(setupMacroParams);
@@ -1877,17 +1873,8 @@ DrawioConfigEditor.html = [
 	'      </div>',
 	'      <div class="field">',
 	'        <label for="cfg-resources"></label>',
-	'        <textarea id="cfg-resources" data-key="resources" data-type="json" placeholder=\'{"saveAs": {"main": "Save a Copy", "de": "Kopie speichern"}, "myKey": "My Text"}\' style="min-height: 60px;"></textarea>',
+	'        <textarea id="cfg-resources" data-key="resources" data-type="json" placeholder=\'{"saveAs": "Save a Copy", "myKey": "My Text"}\' style="min-height: 60px;"></textarea>',
 	'        <p class="field__help"></p>',
-	'      </div>',
-	'      <div class="field">',
-	'        <label data-i18n="cfgDefaultLanguages"></label>',
-	'        <div class="tag-list" id="defaultLanguages-tags"></div>',
-	'        <div class="tag-input-wrap">',
-	'          <input type="text" id="defaultLanguages-input" placeholder="e.g. de, fr">',
-	'          <button type="button" class="btn btn--secondary btn--sm" id="defaultLanguages-add" data-i18n="add"></button>',
-	'        </div>',
-	'        <p class="field__help" data-i18n="cfgDefaultLanguagesHelp"></p>',
 	'      </div>',
 	'      <div id="general-toggles"></div>',
 	'    </div>',

@@ -9,6 +9,12 @@ window.DRAWIO_PUBLIC_BUILD = true;
 // EXPORT_URL to an external service when it is undefined. Keep this until the
 // bundles are rebuilt (cd etc/build && ant), then delete it. See docs/CHANGES.md.
 window.EXPORT_URL = null;
+// TEMPORARY (CHG-002): the UI is English only and resources/dia_*.txt were
+// deleted, but the stale bundles still pick the language from ?lang=, the
+// settings or the browser. Pre-setting both globals makes them use dia.txt.
+// Delete this with the guard above once the bundles are rebuilt.
+window.mxLanguage = 'en';
+window.mxLanguages = [];
 window.DRAWIO_BASE_URL = null; // Replace with path to base of deployment, e.g. https://www.example.com/folder
 window.DRAWIO_VIEWER_URL = null; // Replace your path to the viewer js, e.g. https://www.example.com/js/viewer.min.js
 window.DRAWIO_LIGHTBOX_URL = null; // Replace with your lightbox URL, eg. https://www.example.com

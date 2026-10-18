@@ -1262,7 +1262,7 @@ App.main = function(callback, createUi)
 				// Adds bundle text to resources
 				mxResources.parse(xhr[0].getText());
 				
-				// Adds the bundle to the offline cache: language files are
+				// Adds the bundle to the offline cache: the language file is
 				// cached on first use instead of being precached, and on the
 				// very first visit this page is not yet controlled by the
 				// service worker, so the request above bypassed it. In dev
@@ -1279,24 +1279,6 @@ App.main = function(callback, createUi)
 							{
 								reg.active.postMessage({warmLazy: bundle,
 									warmDev: urlParams['dev'] == '1'});
-
-								// Languages configured as installed by
-								// default - each code is validated against
-								// the lazy manifest by the service worker
-								if (Editor.defaultLanguages != null)
-								{
-									for (var i = 0; i < Editor.defaultLanguages.length; i++)
-									{
-										var lang = Editor.defaultLanguages[i];
-
-										if (typeof lang === 'string' &&
-											/^[a-z0-9-]+$/.test(lang))
-										{
-											reg.active.postMessage({warmLazy:
-												'resources/dia_' + lang + '.txt'});
-										}
-									}
-								}
 							}
 						});
 					}
@@ -1515,12 +1497,10 @@ App.main = function(callback, createUi)
 				{
 					st.innerHTML = 'Error loading page. <a>Please try refreshing.</a>';
 					
-					// Tries reload with default resources in case any language resources were not available
+					// Tries to load the resources again
 					st.getElementsByTagName('a')[0].onclick = function()
 					{
-						mxLanguage = 'en';
-						doLoad(mxResources.getDefaultBundle(RESOURCE_BASE, mxLanguage) ||
-							mxResources.getSpecialBundle(RESOURCE_BASE, mxLanguage));
+						doLoad(RESOURCE_BASE + mxResources.extension);
 					};
 				}
 			});
@@ -1595,11 +1575,10 @@ App.main = function(callback, createUi)
 					}
 				}
 				
-				// Adds required resources (disables loading of fallback properties, this can only
-				// be used if we know that all keys are defined in the language specific file)
+				// Loads the UI resources. The UI is English only (CHG-002), so this
+				// is always the single bundle resources/dia.txt.
 				mxResources.loadDefaultBundle = false;
-				doLoad(mxResources.getDefaultBundle(RESOURCE_BASE, mxLanguage) ||
-					mxResources.getSpecialBundle(RESOURCE_BASE, mxLanguage));
+				doLoad(RESOURCE_BASE + mxResources.extension);
 			}
 			catch (e)
 			{
@@ -5164,80 +5143,6 @@ App.prototype.showSplash = function(force)
 	{
 		showSecondDialog();
 	}
-};
-
-/**
- * Adds a globe icon with an optional label for the language menu to the
- * given element and returns the icon.
- */
-App.prototype.addLanguageMenu = function(elt, addLabel, right)
-{
-	var img = null;
-	var langMenu = this.menus.get('language');
-	
-	if (langMenu != null)
-	{
-		img = document.createElement('div');
-		this.setElementTitle(img, 'language');
-
-		img.className = 'geAdaptiveAsset';
-		img.style.backgroundImage = 'url(' + Editor.globeImage + ')';
-		img.style.backgroundPosition = 'right center';
-		img.style.backgroundRepeat = 'no-repeat';
-		img.style.backgroundSize = '19px 19px';
-		img.style.width = '19px';
-		img.style.height = '19px';
-		mxUtils.setOpacity(img, 40);
-
-		img.style.position = 'absolute';
-		img.style.cursor = 'pointer';
-		img.style.bottom = '20px';
-		img.style.right = (right != null) ? right : '22px';
-		
-		if (addLabel)
-		{
-			img.style.direction = 'rtl';
-			img.style.textAlign = 'right';
-			img.style.right = (right != null) ? right : '24px';
-
-			var label = document.createElement('span');
-			label.style.display = 'inline-block';
-			label.style.fontSize = '12px';
-			label.style.margin = '2px 24px 0 0';
-			label.style.userSelect = 'none';
-			
-			mxUtils.write(label, mxResources.get('language'));
-			img.appendChild(label);
-
-			label.className = 'geAdaptiveAsset';
-		}
-		
-		mxEvent.addListener(img, 'click', mxUtils.bind(this, function(evt)
-		{
-			this.editor.graph.popupMenuHandler.hideMenu();
-			var menu = new mxPopupMenu(this.menus.get('language').funct);
-			menu.smartSeparators = true;
-			menu.showDisabled = true;
-			menu.autoExpand = true;
-			
-			// Disables autoexpand and destroys menu when hidden
-			menu.hideMenu = mxUtils.bind(this, function()
-			{
-				mxPopupMenu.prototype.hideMenu.apply(menu, arguments);
-				menu.destroy();
-			});
-	
-			var offset = mxUtils.getOffset(img);
-			menu.popup(offset.x, offset.y + img.offsetHeight, null, evt);
-			
-			// Allows hiding by clicking on document
-			this.setCurrentMenu(menu);
-		}));
-	
-		elt.appendChild(img);
-	}
-	
-	return img;
 };
 
 /**

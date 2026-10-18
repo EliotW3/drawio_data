@@ -1532,104 +1532,6 @@
 			});
 		}
 		
-		// Adds language menu to options only if localStorage is available for
-		// storing the choice. We do not want to use cookies for older browsers.
-		// Note that the URL param lang=XX is available for setting the language
-		// in older browsers. URL param has precedence over the saved setting.
-		if (mxClient.IS_CHROMEAPP || isLocalStorage)
-		{
-			editorUi.updateOfflineLanguages();
-
-			// The language dialog installs bundles through the active
-			// service worker, which need not control this page (the load
-			// that installed it, hard reloads)
-			var serviceWorkerReady = false;
-
-			try
-			{
-				if (navigator.serviceWorker != null)
-				{
-					navigator.serviceWorker.ready.then(function()
-					{
-						serviceWorkerReady = true;
-					})['catch'](function()
-					{
-						// ignore
-					});
-				}
-			}
-			catch (e)
-			{
-				// ignore
-			}
-
-			this.put('language', new Menu(mxUtils.bind(this, function(menu, parent)
-			{
-				// Refreshes the offline availability of the language bundles
-				// for the next time this menu is opened (asynchronous)
-				editorUi.updateOfflineLanguages();
-
-				var currentLanguage = mxLanguage;
-
-				if (urlParams['lang'] == null && isLocalStorage)
-				{
-					currentLanguage = mxSettings.settings.language;
-				}
-				
-				var addLangItem = mxUtils.bind(this, function (id)
-				{
-					var lang = (id == '') ? mxResources.get('automatic') : mxLanguageMap[id];
-					var item = null;
-					
-					if (lang != '')
-					{
-						// Language bundles are cached on first use - while
-						// offline, only cached bundles produce a translated UI
-						var enabled = editorUi.isLanguageAvailableOffline(id);
-
-						item = menu.addItem(lang, null, mxUtils.bind(this, function()
-						{
-							editorUi.setAndPersistLanguage(id);
-						}), parent, null, enabled);
-
-						if (!enabled)
-						{
-							item.setAttribute('title', mxResources.get('notInOffline'));
-						}
-						
-						if (id == currentLanguage || (id == '' && currentLanguage == null))
-						{
-							menu.addCheckmark(item, Editor.checkmarkImage);
-						}
-					}
-					
-					return item;
-				});
-				
-				addLangItem('');
-				menu.addSeparator(parent);
-
-				// LATER: Sort menu by language name
-				for(var langId in mxLanguageMap)
-				{
-					addLangItem(langId);
-				}
-
-				// Language dialog with the offline bundles - only useful
-				// where a service worker caches them on use
-				if (serviceWorkerReady)
-				{
-					menu.addSeparator(parent);
-
-					menu.addItem(mxResources.get('manage') + '...',
-						null, mxUtils.bind(this, function()
-					{
-						editorUi.showLanguageDialog();
-					}), parent);
-				}
-			})));
-		}
-		
 		// Starts empty so the dialog opens with just the Add dropdown — picking
 		// a layout from there builds the JSON entry via that layout's config
 		// dialog. Hand-editing is still supported on top of what Add inserts.
@@ -5344,8 +5246,6 @@
 			});
 		}
 		
-		var langMenu = this.get('language');
-
 		this.put('extras', new Menu(mxUtils.bind(this, function(menu, parent)
 		{
 			// Compatiblity code for live UI switch and static UI
@@ -5357,11 +5257,6 @@
 					urlParams['extAuth'] != '1' && urlParams['embedInline'] != '1')
 				{
 					editorUi.menus.addSubmenu('appearance', menu, parent);
-				}
-				
-				if (langMenu != null && (urlParams['embed'] != '1' || urlParams['lang'] == null))
-				{
-					editorUi.menus.addSubmenu('language', menu, parent);
 				}
 				
 				if (editorUi.isThemeMenuVisible())
@@ -5416,11 +5311,6 @@
 					editorUi.menus.addSubmenu('appearance', menu, parent);
 				}
 
-				if (urlParams['embed'] != '1' || urlParams['lang'] == null)
-				{
-					this.addSubmenu('language', menu, parent);
-				}
-				
 				if (editorUi.isThemeMenuVisible())
 				{
 					this.addSubmenu('theme', menu, parent);

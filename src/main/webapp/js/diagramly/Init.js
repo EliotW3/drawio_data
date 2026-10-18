@@ -76,111 +76,12 @@ window.RESOURCE_BASE = window.RESOURCE_BASE || RESOURCES_PATH + '/dia';
 // Specifies global configuration via variable
 window.DRAWIO_CONFIG = window.DRAWIO_CONFIG || null;
 
-// Sets the base path, the UI language via URL param and configures the
-// supported languages to avoid 404s. The loading of all core language
-// resources is disabled as all required resources are in grapheditor.
-// properties. Note that in this example the loading of two resource
-// files (the special bundle and the default bundle) is disabled to
-// save a GET request. This requires that all resources be present in
-// the special bundle.
+// The UI is English only (CHG-002): resources/dia.txt is the only language
+// bundle, so the language is not taken from the URL (lang), the settings,
+// the desktop app or the browser. mxLoadResources is false since all
+// resources are in that single bundle, which is loaded by App.main.
 window.mxLoadResources = window.mxLoadResources || false;
-window.mxLanguage = window.mxLanguage || (function() 
-{
-	var lang = urlParams['lang'];
-	
-	// Known issue: No JSON object at this point in quirks in IE8
-	if (lang == null && typeof(JSON) != 'undefined')
-	{
-		// Cannot use mxSettings here
-		if (isLocalStorage) 
-		{
-			try
-			{
-				var value = localStorage.getItem('.drawio-config');
-				
-				if (value != null)
-				{
-					lang = JSON.parse(value).language || null;
-				}
-				
-				if (!lang && window.mxIsElectron)
-				{
-					lang = urlParams['appLang'];
-					
-					if (lang != null)
-			    	{
-			    		var dash = lang.indexOf('-');
-			    		
-			    		if (dash >= 0)
-			    		{
-			    			lang = lang.substring(0, dash);
-			    		}
-			    		
-			    		lang = lang.toLowerCase();
-			    	}
-				}
-			}
-			catch (e)
-			{
-				// cookies are disabled, attempts to use local storage will cause
-				// a DOM error at a minimum on Chrome
-				isLocalStorage = false;
-			}
-		}
-	}
-	
-	return lang;
-})();
-
-// Add new languages here. First entry is translated to [Automatic]
-// in the menu defintion in Diagramly.js.
-window.mxLanguageMap = window.mxLanguageMap ||
-{
-	'i18n': '',
-	'id' : 'Bahasa Indonesia',
-	'ms' : 'Bahasa Melayu',
-	'bs' : 'Bosanski',
-	'bg' : 'Bulgarian',
-	'ca' : 'Català',
-	'cs' : 'Čeština',
-	'da' : 'Dansk',
-	'de' : 'Deutsch',
-	'et' : 'Eesti',
-	'en' : 'English',
-	'es' : 'Español',
-	'eu' : 'Euskara',
-	'fil' : 'Filipino',
-	'fr' : 'Français',
-	'gl' : 'Galego',
-	'it' : 'Italiano',
-	'hu' : 'Magyar',
-	'kl' : 'Kalaallisut',
-	'lt' : 'Lietuvių',
-	'lv' : 'Latviešu',
-	'nl' : 'Nederlands',
-	'no' : 'Norsk',
-	'pl' : 'Polski',
-	'pt-br' : 'Português (Brasil)',
-	'pt' : 'Português (Portugal)',
-	'ro' : 'Română',
-	'fi' : 'Suomi',
-	'sv' : 'Svenska',
-	'vi' : 'Tiếng Việt',
-	'tr' : 'Türkçe',
-	'el' : 'Ελληνικά',
-	'ru' : 'Русский',
-	'sr' : 'Српски',
-	'uk' : 'Українська',
-	'he' : 'עברית',
-	'ar' : 'العربية',
-	'fa' : 'فارسی',
-	'th' : 'ไทย',
-	'ta' : 'தமிழ்',
-	'ko' : '한국어',
-	'ja' : '日本語',
-	'zh' : '简体中文',
-	'zh-tw' : '繁體中文'
-};
+window.mxLanguage = 'en';
 
 if (typeof window.mxBasePath === 'undefined')
 {
@@ -188,48 +89,8 @@ if (typeof window.mxBasePath === 'undefined')
 	window.mxImageBasePath = 'mxgraph/images';
 }
 
-if (window.mxLanguages == null)
-{
-	window.mxLanguages = [];
-	
-	// Populates the list of supported special language bundles
-	for (var lang in mxLanguageMap)
-	{
-		// Empty means default (ie. browser language), "en" means English (default for unsupported languages)
-		// Since "en" uses no extension this must not be added to the array of supported language bundles.
-		if (lang != 'en')
-		{
-			window.mxLanguages.push(lang);
-		}
-	}
-
-	// Uses browser language if supported
-	if (window.mxLanguage == null &&
-		(window.location.hostname == 'test.draw.io' ||
-		window.location.hostname == 'www.draw.io' ||
-		window.location.hostname == 'viewer.diagrams.net' ||
-		window.location.hostname == 'embed.diagrams.net' ||
-		window.location.hostname == 'app.diagrams.net' ||
-		window.location.hostname == 'jgraph.github.io'))
-	{
-		var lang = navigator.language;
-
-		if (lang != null)
-		{
-			var dash = lang.indexOf('-');
-				
-			if (dash > 0)
-			{
-				lang = lang.substring(0, dash);
-			}
-
-			if (window.mxLanguages.indexOf(lang) >= 0)
-			{
-				window.mxLanguage = lang;
-			}
-		}
-	}
-}
+// No special language bundles (see mxResources.getDefaultBundle)
+window.mxLanguages = [];
 
 //Disable Google Drive when running in a WebView (e.g, MS Teams App) Since auth doesn't work with disallowd_useragent
 //[For MS Teams only] TODO Check if other apps are affected also (android and iOS)

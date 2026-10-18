@@ -1,6 +1,6 @@
 # draw.io (`drawio_data`) — Architecture and Code Guide
 
-> A reference to how this fork of draw.io works, organised so that each subsystem has a stable section number to cite in discussions and change requests (e.g. "see §7.1 file format"). Code locations are given as repository-relative links. The document was written against upstream **version 32.5.5** (see [VERSION](../VERSION)). Line numbers were last updated with CHG-001 and will drift as the code changes. Function names are the reliable anchors.
+> A reference to how this fork of draw.io works, organised so that each subsystem has a stable section number to cite in discussions and change requests (e.g. "see §7.1 file format"). Code locations are given as repository-relative links. The document was written against upstream **version 32.5.5** (see [VERSION](../VERSION)). Line numbers were last updated with CHG-002 and will drift as the code changes. Function names are the reliable anchors.
 >
 > **Fork changes** are recorded in [CHANGES.md](CHANGES.md) (one `CHG-NNN` entry per change, with its impact). When a change alters behaviour described here, the relevant section is updated in the same change and notes the entry ID.
 
@@ -18,7 +18,7 @@
 10. [Files, Storage Back-ends and Libraries](#10-files-storage-back-ends-and-libraries)
 11. [Synchronisation and Real-time Collaboration](#11-synchronisation-and-real-time-collaboration)
 12. [Import, Export, Layout and Text-to-Diagram Extensions](#12-import-export-layout-and-text-to-diagram-extensions)
-13. [Static Assets, Styling, i18n and Offline Support](#13-static-assets-styling-i18n-and-offline-support)
+13. [Static Assets, Styling, UI Text and Offline Support](#13-static-assets-styling-ui-text-and-offline-support)
 14. [Plugins](#14-plugins)
 15. [Java Server (Servlets)](#15-java-server-servlets)
 16. [Security Model](#16-security-model)
@@ -73,8 +73,9 @@ The front end is a stack of four layers. Each upper layer **patches the prototyp
 
 - `PreConfig.js`, which is loaded on any host other than the official ones and therefore on a self-hosted copy, forces `sync = manual`.
 - **All export is client-side.** VSDX export and server-side (export-service) export have been removed from this fork (CHG-001, [CHANGES.md](CHANGES.md)). PDF uses the browser print dialog.
+- **The UI is English only.** All translations and the language picker have been removed; `resources/dia.txt` is the single string bundle (CHG-002, [§13.3](#133-ui-text-resources)).
 - The stencil XML sources, the collaboration relay and cache servers, `OrgSettings.js` and the Atlassian/monday plugins are **not in this repository**.
-- The committed `js/*.min.js` bundles currently predate CHG-001. Normal mode runs them until they are rebuilt, while `?dev=1` runs the current sources ([CHANGES.md › Open follow-ups](CHANGES.md#open-follow-ups)).
+- The committed `js/*.min.js` bundles currently predate CHG-001 and CHG-002. Normal mode runs them until they are rebuilt, while `?dev=1` runs the current sources ([CHANGES.md › Open follow-ups](CHANGES.md#open-follow-ups)).
 - Upstream does not accept pull requests (README). This fork is the place to make changes.
 
 ---
@@ -98,10 +99,9 @@ drawio_data/
 │   ├── build/                   build.xml, build.properties, compiler.jar (Closure)      §3
 │   ├── integrate/Integrate.js   bootstrap appended to integrate.min.js                   §3.3
 │   ├── dependencies/            vendored-library manifest + DOMPurify smoke test        §3.3
-│   ├── imageResize/             Node CLI to shrink embedded images in .drawio files      §3.3
-│   └── i18n/check-translations.py                                                       §13.3
+│   └── imageResize/             Node CLI to shrink embedded images in .drawio files      §3.3
 └── src/main/
-    ├── server/java/com/mxgraph/online/   Java servlets (OAuth, proxy, embed, export, log)  §15
+    ├── server/java/com/mxgraph/online/   Java servlets (OAuth, proxy, embed, log)          §15
     └── webapp/                            the deployable web root (= the WAR contents)
         ├── index.html, teams.html         editor entry pages                              §4.1
         ├── export3.html, open.html, clear.html, onedrive3.html, vsdxImporter.html
@@ -126,7 +126,7 @@ drawio_data/
         ├── shapes/            49 domain shape files (AWS3D, BPMN, mockups, P&ID, …)            §8.1
         ├── stencils/          only LICENSE + clipart (XML sources not public, see stencils.min.js)
         ├── styles/            grapheditor.css, default.xml stylesheet, high-contrast, fonts    §13.1
-        ├── resources/         dia.txt + 60 translations                                        §13.3
+        ├── resources/         dia.txt: every UI string (English only, CHG-002)                §13.3
         ├── templates/         index.xml + 155 template diagrams with previews                  §13.4
         ├── plugins/           optional plugins loaded with ?p=                                 §14
         ├── connect/common/js/mxReader.js   Atlassian Connect viewer                            §9.4
@@ -192,7 +192,6 @@ The `app` target does the main work:
 | [etc/dependencies/package.json](../etc/dependencies/package.json) | A dummy manifest listing the vendored JS libraries (jsZip, perfect-freehand, jQuery, pako, crypto-js, DOMPurify, spin.js, roughjs, MathJax) so that GitHub's dependency scanning can flag CVEs. Nothing installs from it. |
 | [etc/dependencies/dompurify-smoke.js](../etc/dependencies/dompurify-smoke.js) | A Node/jsdom regression harness to run when upgrading DOMPurify. It extracts `DOM_PURIFY_CONFIG` from `grapheditor/Init.js`, reproduces the `afterSanitizeAttributes` hooks from `Graph.js`, checks that a list of XSS payloads is neutralised (including mutation-XSS after a re-parse), and diffs sanitiser output for every HTML label in `templates/`. |
 | [etc/imageResize/](../etc/imageResize/) | A standalone Node CLI (`sharp` + `yargs`) that shrinks embedded `data:image/png|jpeg` URIs inside an *uncompressed* `.drawio` file. |
-| [etc/i18n/check-translations.py](../etc/i18n/check-translations.py) | Checks that every key in `resources/dia.txt` exists in each `dia_<lang>.txt`, and reports missing, extra, duplicate and malformed lines. It exits non-zero if any keys are missing. |
 | [etc/build/compiler.jar](../etc/build/compiler.jar) | The Closure Compiler. |
 
 ### 3.4 Repository metadata
@@ -236,14 +235,14 @@ The `app` target does the main work:
 
 [js/diagramly/Devel.js](../src/main/webapp/js/diagramly/Devel.js) is the **dev-mode manifest**, the unminified equivalent of the bundles in `build.xml`. It also contains the canonical **Content-Security-Policy** definitions (the `CSP-POLICIES-BEGIN/END` block) for every production host. With `?print-csp=1` it prints them to the console. The CSP whitelists Google APIs, GitHub, GitLab, Microsoft Graph/OneDrive/SharePoint, Trello, OpenAI and Anthropic (`api.anthropic.com`) for the AI features, and Google Fonts.
 
-To run the app from source, serve `src/main/webapp` over HTTP and open `index.html?dev=1`. No build step is needed. Useful developer parameters, documented at the top of `bootstrap.js` and throughout the code, include `test=1` (debug logging via `EditorUi.debug`), `ui=classic|kennedy|sketch|simple|min|atlas`, `offline=1`, `local=1`, `embed=1`, `lightbox=1`, `chrome=0`, `p=<plugin ids>`, `lang=xx`, `sync=none|manual|auto`, `math=0`, `splash=0`, `mode=google|onedrive|github|gitlab|device|browser`.
+To run the app from source, serve `src/main/webapp` over HTTP and open `index.html?dev=1`. No build step is needed. Useful developer parameters, documented at the top of `bootstrap.js` and throughout the code, include `test=1` (debug logging via `EditorUi.debug`), `ui=classic|kennedy|sketch|simple|min|atlas`, `offline=1`, `local=1`, `embed=1`, `lightbox=1`, `chrome=0`, `p=<plugin ids>`, `sync=none|manual|auto`, `math=0`, `splash=0`, `mode=google|onedrive|github|gitlab|device|browser`.
 
 ### 4.4 Runtime configuration globals (`PreConfig.js`, `Init.js` × 2, `PostConfig.js`)
 
 Configuration is layered through **global `window.*` variables**. Most files set a value only if it is still unset (`window.X = window.X || default`), so the earliest assignment usually wins. `PostConfig.js` is the exception:
 
 1. [js/PreConfig.js](../src/main/webapp/js/PreConfig.js) is the **deployment hook**. It is loaded on every host except `*.draw.io`/`*.diagrams.net` and in Electron, so it always applies to a self-hosted copy. It sets `DRAWIO_PUBLIC_BUILD = true`, a TEMPORARY `EXPORT_URL = null` guard that only exists for the stale prebuilt bundles and will be removed after the rebuild (CHG-001), `DRAWIO_BASE_URL`, `DRAWIO_VIEWER_URL`, `DRAWIO_LIGHTBOX_URL`, `DRAW_MATH_URL = 'math4/es5'`, `DRAWIO_CONFIG = null` (a global JSON configuration, see [§7.2](#72-editorconfigure-and-the-configuration-object)), and forces `urlParams['sync'] = 'manual'`. **This is the file to edit for a self-hosted deployment.**
-2. [js/diagramly/Init.js](../src/main/webapp/js/diagramly/Init.js) sets the URLs (`DRAWIO_SERVER_URL`, `PROXY_URL`, `SAVE_URL`, `REALTIME_URL`, `RT_WEBSOCKET_URL`, `NOTIFICATIONS_URL`, `ICONSEARCH_PATH`, `ICON_SERVICE_PATH`, `TEMPLATE_PATH`, `SHAPES_PATH`, `RESOURCES_PATH`, GitHub/GitLab client IDs) and `ALLOW_CUSTOM_PLUGINS`. It resolves the UI language (`mxLanguage`) from `?lang`, then `localStorage['.drawio-config'].language`, then the browser language, using the language list `mxLanguageMap`. It also resolves `uiTheme` (`?ui` or the stored setting) and normalises the parameter combinations:
+2. [js/diagramly/Init.js](../src/main/webapp/js/diagramly/Init.js) sets the URLs (`DRAWIO_SERVER_URL`, `PROXY_URL`, `SAVE_URL`, `REALTIME_URL`, `RT_WEBSOCKET_URL`, `NOTIFICATIONS_URL`, `ICONSEARCH_PATH`, `ICON_SERVICE_PATH`, `TEMPLATE_PATH`, `SHAPES_PATH`, `RESOURCES_PATH`, GitHub/GitLab client IDs) and `ALLOW_CUSTOM_PLUGINS`. The UI is English only ([CHG-002](CHANGES.md#chg-002--english-only-user-interface)): it sets `mxLanguage = 'en'` and `mxLanguages = []`, so `?lang`, stored settings and the browser language are ignored. It also resolves `uiTheme` (`?ui` or the stored setting) and normalises the parameter combinations:
    - `lightbox=1` ⇒ `chrome=0`
    - `embedInline=1` ⇒ `embed=1, ui=sketch, plugins=0, proto=json`
    - `configure=1` without `embed=1` is ignored (a security measure)
@@ -266,7 +265,7 @@ Configuration is layered through **global `window.*` variables**. Most files set
    - With `configure=1` it posts `{event:'configure'}` to the opener/parent and waits for `{action:'configure', config}`.
    - Otherwise it applies `window.DRAWIO_CONFIG`, then `localStorage[Editor.configurationKey]` (merged on top of any cached organisation settings), through `Editor.configure()` and then `mxSettings.load()`.
 7. `doMain()` applies `autosaveDelay`/`defaultEdgeLength` from settings, prefetches the default fonts, then `doLoad(bundle)`:
-   - It fetches the **language bundle** `resources/dia[_xx].txt` (and in dev mode `styles/default.xml`) and calls `mxResources.parse()`.
+   - It fetches the **UI string bundle** `resources/dia.txt` (and in dev mode `styles/default.xml`) and calls `mxResources.parse()`.
    - It handles `#_CONFIG_<compressed json>` links, which set the local configuration after two confirmations.
    - In production it loads `shapes-14-6-5.min.js`, `stencils.min.js` and `extensions.min.js` (with `mxStencilRegistry.allowEval = false`), then calls `realMain()`.
 8. `realMain()` picks the UI theme (`Editor.currentTheme`, which falls back to `kennedy`; `simple` is preferred on small screens on the official hosts), then creates the UI:
@@ -281,13 +280,13 @@ It also wires `window.launchQueue` (OS "open with" for the installed PWA) and la
 
 ### 4.6 `App` construction → `init()` → `load()` → `start()`
 
-[`App`](../src/main/webapp/js/diagramly/App.js#L10) extends `EditorUi` (`mxUtils.extend(App, EditorUi)`). The `EditorUi` constructor builds the DOM and calls `this.init()`, which `App.prototype.init` overrides ([App.js:1917](../src/main/webapp/js/diagramly/App.js#L1917)) to:
+[`App`](../src/main/webapp/js/diagramly/App.js#L10) extends `EditorUi` (`mxUtils.extend(App, EditorUi)`). The `EditorUi` constructor builds the DOM and calls `this.init()`, which `App.prototype.init` overrides ([App.js:1917](../src/main/webapp/js/diagramly/App.js#L1896)) to:
 
 - create the **storage clients**: `this.gitHub`, `this.gitLab`, `this.oneDrive`, `this.m365` (both `OneDriveClient`), `this.trello`, and `this.drive` (`DriveClient`, once `gapi` has loaded). Each fires `clientLoaded`, and its `userChanged` refreshes the header and restores libraries.
 - set the initial storage **mode** (`App.mode` from `?mode` or the stored `.mode`). It discards modes for removed storages such as Dropbox.
 - run `DrawioFileSync.checkCacheAlive`, install the "fit on `fileLoaded`" listener, and run `updateHeader()`.
 
-After `init`, the constructor runs plugin callbacks and calls **`this.load()`**, which (if not embedded) shows the "starting" spinner, waits for `gapi` when Drive is enabled, and then calls **`this.start()`** ([App.js:3943](../src/main/webapp/js/diagramly/App.js#L3943)). `start()`:
+After `init`, the constructor runs plugin callbacks and calls **`this.load()`**, which (if not embedded) shows the "starting" spinner, waits for `gapi` when Drive is enabled, and then calls **`this.start()`** ([App.js:3943](../src/main/webapp/js/diagramly/App.js#L3922)). `start()`:
 
 - restores libraries and installs the final `window.onerror` (errors are logged through `EditorUi.logError` and shown with `handleError`)
 - listens to `hashchange` → `loadFile(newId)` (or a page switch if only `#…#{"pageId":…}` changed)
@@ -295,7 +294,7 @@ After `init`, the constructor runs plugin callbacks and calls **`this.load()`**,
 
 ### 4.7 File addressing: the URL hash
 
-The current diagram is identified by **`window.location.hash`**. The first character selects the storage ([App.loadFile](../src/main/webapp/js/diagramly/App.js#L6585), [App.storages](../src/main/webapp/js/diagramly/App.js#L266)):
+The current diagram is identified by **`window.location.hash`**. The first character selects the storage ([App.loadFile](../src/main/webapp/js/diagramly/App.js#L6490), [App.storages](../src/main/webapp/js/diagramly/App.js#L266)):
 
 | Prefix | Storage / meaning | Handled by |
 |---|---|---|
@@ -414,7 +413,7 @@ Only a few layouts remain in the core: [mxGraphLayout](../src/main/webapp/mxgrap
 
 ### 5.6 Utilities (`util/`)
 
-[mxUtils](../src/main/webapp/mxgraph/src/util/mxUtils.js) is the grab-bag helper: XML parsing (`parseXml`, `getXml`, `getPrettyXml`), DOM helpers, HTTP (`get`, `post`, `getAll` built on [mxXmlRequest](../src/main/webapp/mxgraph/src/util/mxXmlRequest.js)), geometry maths, colour parsing and light/dark handling, style-string editing (`setStyle`, `setCellStyles`), and HTML→SVG text conversion (`convertHtmlToSvg`, used when exporting labels without `foreignObject`). [mxConstants](../src/main/webapp/mxgraph/src/util/mxConstants.js) defines every style key (`STYLE_FILLCOLOR = 'fillColor'`, …) and constant. Also here: [mxEvent](../src/main/webapp/mxgraph/src/util/mxEvent.js) (cross-browser DOM events and event-name constants), [mxEventSource](../src/main/webapp/mxgraph/src/util/mxEventSource.js)/[mxEventObject](../src/main/webapp/mxgraph/src/util/mxEventObject.js) (the observer pattern used everywhere: `addListener(name, fn(sender, evt))`, `fireEvent`), [mxUndoManager](../src/main/webapp/mxgraph/src/util/mxUndoManager.js)/[mxUndoableEdit](../src/main/webapp/mxgraph/src/util/mxUndoableEdit.js), [mxClipboard](../src/main/webapp/mxgraph/src/util/mxClipboard.js), [mxResources](../src/main/webapp/mxgraph/src/util/mxResources.js) (i18n key/value store, see [§13.3](#133-internationalisation-resources)), [mxGuide](../src/main/webapp/mxgraph/src/util/mxGuide.js) (alignment and equal-spacing guides), [mxDragSource](../src/main/webapp/mxgraph/src/util/mxDragSource.js) (sidebar drag and drop), [mxPopupMenu](../src/main/webapp/mxgraph/src/util/mxPopupMenu.js), [mxWindow](../src/main/webapp/mxgraph/src/util/mxWindow.js) (floating panels), [mxImageExport](../src/main/webapp/mxgraph/src/util/mxImageExport.js) (draws cell states onto any canvas), [mxAbstractCanvas2D](../src/main/webapp/mxgraph/src/util/mxAbstractCanvas2D.js), [mxSvgCanvas2D](../src/main/webapp/mxgraph/src/util/mxSvgCanvas2D.js), [mxXmlCanvas2D](../src/main/webapp/mxgraph/src/util/mxXmlCanvas2D.js), [mxMorphing](../src/main/webapp/mxgraph/src/util/mxMorphing.js)/[mxAnimation](../src/main/webapp/mxgraph/src/util/mxAnimation.js)/[mxEffects](../src/main/webapp/mxgraph/src/util/mxEffects.js), [mxPanningManager](../src/main/webapp/mxgraph/src/util/mxPanningManager.js), [mxAutoSaveManager](../src/main/webapp/mxgraph/src/util/mxAutoSaveManager.js), and small value types (`mxPoint`, `mxRectangle`, `mxImage`, `mxDictionary`, `mxObjectIdentity`, `mxUrlConverter`, `mxImageBundle`, `mxForm`, `mxToolbar`, `mxDivResizer`, `mxLog`).
+[mxUtils](../src/main/webapp/mxgraph/src/util/mxUtils.js) is the grab-bag helper: XML parsing (`parseXml`, `getXml`, `getPrettyXml`), DOM helpers, HTTP (`get`, `post`, `getAll` built on [mxXmlRequest](../src/main/webapp/mxgraph/src/util/mxXmlRequest.js)), geometry maths, colour parsing and light/dark handling, style-string editing (`setStyle`, `setCellStyles`), and HTML→SVG text conversion (`convertHtmlToSvg`, used when exporting labels without `foreignObject`). [mxConstants](../src/main/webapp/mxgraph/src/util/mxConstants.js) defines every style key (`STYLE_FILLCOLOR = 'fillColor'`, …) and constant. Also here: [mxEvent](../src/main/webapp/mxgraph/src/util/mxEvent.js) (cross-browser DOM events and event-name constants), [mxEventSource](../src/main/webapp/mxgraph/src/util/mxEventSource.js)/[mxEventObject](../src/main/webapp/mxgraph/src/util/mxEventObject.js) (the observer pattern used everywhere: `addListener(name, fn(sender, evt))`, `fireEvent`), [mxUndoManager](../src/main/webapp/mxgraph/src/util/mxUndoManager.js)/[mxUndoableEdit](../src/main/webapp/mxgraph/src/util/mxUndoableEdit.js), [mxClipboard](../src/main/webapp/mxgraph/src/util/mxClipboard.js), [mxResources](../src/main/webapp/mxgraph/src/util/mxResources.js) (i18n key/value store, see [§13.3](#133-ui-text-resources)), [mxGuide](../src/main/webapp/mxgraph/src/util/mxGuide.js) (alignment and equal-spacing guides), [mxDragSource](../src/main/webapp/mxgraph/src/util/mxDragSource.js) (sidebar drag and drop), [mxPopupMenu](../src/main/webapp/mxgraph/src/util/mxPopupMenu.js), [mxWindow](../src/main/webapp/mxgraph/src/util/mxWindow.js) (floating panels), [mxImageExport](../src/main/webapp/mxgraph/src/util/mxImageExport.js) (draws cell states onto any canvas), [mxAbstractCanvas2D](../src/main/webapp/mxgraph/src/util/mxAbstractCanvas2D.js), [mxSvgCanvas2D](../src/main/webapp/mxgraph/src/util/mxSvgCanvas2D.js), [mxXmlCanvas2D](../src/main/webapp/mxgraph/src/util/mxXmlCanvas2D.js), [mxMorphing](../src/main/webapp/mxgraph/src/util/mxMorphing.js)/[mxAnimation](../src/main/webapp/mxgraph/src/util/mxAnimation.js)/[mxEffects](../src/main/webapp/mxgraph/src/util/mxEffects.js), [mxPanningManager](../src/main/webapp/mxgraph/src/util/mxPanningManager.js), [mxAutoSaveManager](../src/main/webapp/mxgraph/src/util/mxAutoSaveManager.js), and small value types (`mxPoint`, `mxRectangle`, `mxImage`, `mxDictionary`, `mxObjectIdentity`, `mxUrlConverter`, `mxImageBundle`, `mxForm`, `mxToolbar`, `mxDivResizer`, `mxLog`).
 
 ---
 
@@ -541,12 +540,12 @@ A `.drawio` file is an XML document with one `<diagram>` per **page**:
   - **`.svg`**: an SVG whose `content` attribute holds the `mxfile` (`getEmbeddedSvg`).
   - **`.png`**: a PNG with the `mxfile` in a zTXt/tEXt chunk (`Editor.writeGraphModelToPng`, `getEmbeddedPng`). This is used for `.drawio.png` editable images.
   - **`.html`**: a page with a `.mxgraph` div and `data-mxgraph` JSON for the viewer (`getHtml2`).
-- **Read path**: [EditorUi.setFileData](../src/main/webapp/js/diagramly/EditorUi.js#L3261) validates and parses the data, then `editor.extractGraphModel(node, true)` → [Editor.extractGraphModel](../src/main/webapp/js/diagramly/Editor.js#L2457) unwraps HTML (`.mxgraph` div), SVG (`content` attribute) and `<diagram>` nodes. It builds `this.pages` as an array of [DiagramPage](../src/main/webapp/js/diagramly/Pages.js#L12), rejects duplicate page IDs, and picks the current page from `#…{"pageId"}`, `?page-id` or `?page`. Finally it calls `editor.setGraphXml()` for that page. PDF (`extractGraphModelFromPdf`), PNG (`extractGraphModelFromPng`) and JPEG metadata can also carry diagrams.
+- **Read path**: [EditorUi.setFileData](../src/main/webapp/js/diagramly/EditorUi.js#L3261) validates and parses the data, then `editor.extractGraphModel(node, true)` → [Editor.extractGraphModel](../src/main/webapp/js/diagramly/Editor.js#L2449) unwraps HTML (`.mxgraph` div), SVG (`content` attribute) and `<diagram>` nodes. It builds `this.pages` as an array of [DiagramPage](../src/main/webapp/js/diagramly/Pages.js#L12), rejects duplicate page IDs, and picks the current page from `#…{"pageId"}`, `?page-id` or `?page`. Finally it calls `editor.setGraphXml()` for that page. PDF (`extractGraphModelFromPdf`), PNG (`extractGraphModelFromPng`) and JPEG metadata can also carry diagrams.
 - Corrupt files go through `validateFileData` → `repairFileData` → `getRecoveryData`/`RecoveryDialog`, which offers earlier revisions or repaired copies.
 
 ### 7.2 `Editor.configure()` and the configuration object
 
-[Editor.configure(config)](../src/main/webapp/js/diagramly/Editor.js#L2972) applies the documented **draw.io configuration JSON**. The configuration comes from `DRAWIO_CONFIG`, from `localStorage['.configuration']` (edited in *Extras → Configuration* through `ConfigEditor`), or from the embed `configure` message. It recognises around 150 keys, including:
+[Editor.configure(config)](../src/main/webapp/js/diagramly/Editor.js#L2964) applies the documented **draw.io configuration JSON**. The configuration comes from `DRAWIO_CONFIG`, from `localStorage['.configuration']` (edited in *Extras → Configuration* through `ConfigEditor`), or from the embed `configure` message. It recognises around 150 keys, including:
 
 - **Look & feel**: `css`, `customCss`, `darkColor`, `lightColor`, `systemColors`, `defaultColorSchemes`/`customColorSchemes`, `presetColors`, `defaultColors`, `customFonts`, `defaultFonts`, `fontCss`, `colorNames`, `sidebarWidth`, `sidebarTitles`, `foldingIconSize`
 - **Defaults**: `defaultVertexStyle`, `defaultEdgeStyle`, `defaultTextStyle`, `styles`, `defaultPageVisible`, `defaultGridEnabled`, `defaultGridSize`, `pageFormat`, `defaultEdgeLength`, `defaultAdaptiveColors`, `emptyDiagramXml`, `xml`, `compressXml`, `defaultFileType`
@@ -555,7 +554,7 @@ A `.drawio` file is an XML document with one `<diagram>` per **page**:
 - **AI**: `enableAi`, `aiModels`, `aiConfigs`, `aiGlobals`, `aiActions`, `gptApiKey`/`geminiApiKey`/`claudeApiKey` (configuration-only, never read from URLs), `gptUrl`
 - **Other**: `mermaid`, `globalVars`, `resources` (string overrides), `settingsName` (namespaces the localStorage keys), `debug`, `plugins`
 
-Keys are stored on `Editor.*` statics or prototype defaults. Per-user preferences (language, theme, recent colours, plugins, units, panel widths, …) are kept separately in **`mxSettings`** ([Settings.js](../src/main/webapp/js/diagramly/Settings.js), localStorage key `.drawio-config`, versioned by `currentVersion`).
+Keys are stored on `Editor.*` statics or prototype defaults. Per-user preferences (theme, recent colours, plugins, units, panel widths, …) are kept separately in **`mxSettings`** ([Settings.js](../src/main/webapp/js/diagramly/Settings.js), localStorage key `.drawio-config`, versioned by `currentVersion`).
 
 ### 7.3 Other `diagramly/Editor.js` extensions
 
@@ -568,8 +567,8 @@ Keys are stored on `Editor.*` statics or prototype defaults. Per-user preference
 - **CSV import helpers** (`csvToArray`), CRC32, and `writeGraphModelToPng`.
 - **Rough.js "sketch" rendering**: `Editor.createRoughCanvas` wraps the canvas when `sketch=1` (hand-drawn style), and `Editor.expandSvgPatterns` handles fill patterns.
 - **Tags**: `getAllTags`, `getCellsForTags`, `setHiddenTags`, and the Tags window/dialog (`createTagsDialog`).
-- **Custom link actions**: [Graph.executeCustomActions](../src/main/webapp/js/diagramly/Editor.js#L11393) implements `data:action/json,{"actions":[…]}` links, which can toggle, show, hide, highlight, select, scroll, change styles or switch pages. They are also the engine of the **step animation player** (`Editor.AnimationPlayer`, `parseAnimationData`, flow animation), edited in `AnimationDialog`.
-- **Stencil library registration**: `mxStencilRegistry.libraries[...]` maps each `mxgraph.<pkg>` prefix to its `shapes/*.js` and `stencils/*.xml` files ([Editor.js:12906](../src/main/webapp/js/diagramly/Editor.js#L12906)).
+- **Custom link actions**: [Graph.executeCustomActions](../src/main/webapp/js/diagramly/Editor.js#L11372) implements `data:action/json,{"actions":[…]}` links, which can toggle, show, hide, highlight, select, scroll, change styles or switch pages. They are also the engine of the **step animation player** (`Editor.AnimationPlayer`, `parseAnimationData`, flow animation), edited in `AnimationDialog`.
+- **Stencil library registration**: `mxStencilRegistry.libraries[...]` maps each `mxgraph.<pkg>` prefix to its `shapes/*.js` and `stencils/*.xml` files ([Editor.js:12906](../src/main/webapp/js/diagramly/Editor.js#L12885)).
 - **Enumeration** (numbered shapes), shadows, `selectUnlockedLayer`, and the multi-page `PrintDialog`.
 
 ### 7.4 `diagramly/EditorUi.js`: the application UI
@@ -587,7 +586,6 @@ Keys are stored on `Editor.*` statics or prototype defaults. Per-user preference
 | **Embed protocol** | `installMessageHandler`, `initializeEmbedMode`, `initializeInlineEmbedMode`, `createLoadMessage`, `addEmbedButtons`, `remoteInvoke` ([§9](#9-embedding-and-integration)) |
 | **Libraries** | `loadLibrary`, `libraryLoaded` (custom libraries in the sidebar, editable via `LibraryDialog`), the scratchpad (`toggleScratchpad`, `loadScratchpad`, synced across tabs with `BroadcastChannel`) |
 | **Themes & appearance** | `setCurrentTheme`/`doSetCurrentTheme` (`kennedy` = classic, `simple`, `sketch`, `min`, `atlas`), `setDarkMode`/`isAutoDarkMode`, `setHighContrast`, `setSketchMode`, `setAdaptiveColors`, `updateDefaultStyles`, `setRulerVisible`, `setPagesVisible`, docking windows (`createDockManager`, window-state persistence) |
-| **Offline languages** | `getOfflineLanguages`, `installOfflineLanguage` (asks the service worker to cache `dia_xx.txt`) |
 | **Comments** | `getComments`, `addComment`, anchored comments, @mentions, `updateCommentOverlays`, comment UI (the `addComment`/`editComment` closures at the end of the file) |
 | **Browser database** | `openDatabase`, `setDatabaseItem`, `getDatabaseItem`, … (IndexedDB: the `objects` store for drafts, settings-like items and the scratchpad, and the `files`/`filesInfo` stores for browser-storage diagrams) |
 | **Collaboration UI** | `bringEveryoneToMe`, `setPresenting`, `startFollowing`, remote cursors and shared views |
@@ -608,7 +606,7 @@ Keys are stored on `Editor.*` statics or prototype defaults. Per-user preference
 
 ### 7.7 Menus, actions and dialogs added by the application
 
-[diagramly/Menus.js](../src/main/webapp/js/diagramly/Menus.js) wraps `Menus.prototype.init` and adds the application menus and actions: **File** (`new`, `open`, `openFrom`, `openRecent`, `importFrom`, `exportAs` → `exportPng/Jpg/Webp/AnimatedGif/Svg/Pdf/Html/Xml/Url/Json` and *Advanced…*, `embed` → `embedHtml/Svg/Image/Iframe/Notion`, `publish`, `save`, `saveAs`, `makeCopy`, `rename`, `moveToFolder`, `properties`, `revisionHistory`, `synchronize`, `close`), **Edit**, **View** (`pageTabs`, `ruler`, `darkMode`, `adaptiveColors`, `presentationMode`, `fullscreen`, `units`), **Arrange** (`runLayout`, `insertLayout`, layouts), **Extras** (`configuration`, `plugins`, `editDiagram`, `tags`, `findReplace`, `animation`, `language`, `theme`, `mathematicalTypesetting`, `copyAsImage/Svg`, `organizationAdmin`), **Insert** (shapes, `insertTemplate`, `insertLayout`, `insertFreehand`, `insertPolygon`, Mermaid/PlantUML/CSV via `ParseDialog`, `generate` (AI)), **Help**, the collaboration toggles (`shareCursor`, `showRemoteCursors`, `presentToEveryone`), and the developer `test*` items that appear with `?test=1`. In embed mode the `save` action posts `{event:'save', xml, …}` built from `createLoadMessage('save')` ([Menus.js:3228](../src/main/webapp/js/diagramly/Menus.js#L3228)).
+[diagramly/Menus.js](../src/main/webapp/js/diagramly/Menus.js) wraps `Menus.prototype.init` and adds the application menus and actions: **File** (`new`, `open`, `openFrom`, `openRecent`, `importFrom`, `exportAs` → `exportPng/Jpg/Webp/AnimatedGif/Svg/Pdf/Html/Xml/Url/Json` and *Advanced…*, `embed` → `embedHtml/Svg/Image/Iframe/Notion`, `publish`, `save`, `saveAs`, `makeCopy`, `rename`, `moveToFolder`, `properties`, `revisionHistory`, `synchronize`, `close`), **Edit**, **View** (`pageTabs`, `ruler`, `darkMode`, `adaptiveColors`, `presentationMode`, `fullscreen`, `units`), **Arrange** (`runLayout`, `insertLayout`, layouts), **Extras** (`configuration`, `plugins`, `editDiagram`, `tags`, `findReplace`, `animation`, `theme`, `mathematicalTypesetting`, `copyAsImage/Svg`, `organizationAdmin`), **Insert** (shapes, `insertTemplate`, `insertLayout`, `insertFreehand`, `insertPolygon`, Mermaid/PlantUML/CSV via `ParseDialog`, `generate` (AI)), **Help**, the collaboration toggles (`shareCursor`, `showRemoteCursors`, `presentToEveryone`), and the developer `test*` items that appear with `?test=1`. In embed mode the `save` action posts `{event:'save', xml, …}` built from `createLoadMessage('save')` ([Menus.js:3228](../src/main/webapp/js/diagramly/Menus.js#L3130)).
 
 [diagramly/Dialogs.js](../src/main/webapp/js/diagramly/Dialogs.js) (24k lines) contains the application dialogs:
 
@@ -625,7 +623,7 @@ Keys are stored on `Editor.*` statics or prototype defaults. Per-user preference
 
 ### 7.8 AI features
 
-The AI features are configured in [diagramly/Editor.js](../src/main/webapp/js/diagramly/Editor.js#L390). `Editor.enableAi` is true only on the official hosts unless configured. `Editor.aiConfigs` describes request templates for three providers:
+The AI features are configured in [diagramly/Editor.js](../src/main/webapp/js/diagramly/Editor.js#L382). `Editor.enableAi` is true only on the official hosts unless configured. `Editor.aiConfigs` describes request templates for three providers:
 
 - `gpt`: OpenAI chat completions.
 - `gemini`: Google `generateContent`.
@@ -674,7 +672,7 @@ Many also define `customProperties` (editable in the Format panel) and handles. 
 
 ### 8.2 XML stencils (`stencils.min.js`)
 
-The public repo **does not contain the stencil XML sources**. The [stencils/](../src/main/webapp/stencils/) folder only has a clip-art PNG and a LICENSE. Instead, [js/stencils.min.js](../src/main/webapp/js/stencils.min.js) (3.9 MB) holds a map of 204 stencil files (`f['aws4.xml'] = '<compact encoding>'`) and overrides `mxStencilRegistry.loadStencil` to decode them from memory. When a style names `shape=mxgraph.<pkg>.<name>`, the registry resolves `mxStencilRegistry.libraries[pkg]` ([diagramly/Editor.js:12906](../src/main/webapp/js/diagramly/Editor.js#L12906)) to the stencil and shape files to load ([§6.3](#63-graph-grapheditorgraphjs)). The XML stencil language is documented in [mxStencil](../src/main/webapp/mxgraph/src/shape/mxStencil.js). `EditShapeDialog` lets users author inline stencils.
+The public repo **does not contain the stencil XML sources**. The [stencils/](../src/main/webapp/stencils/) folder only has a clip-art PNG and a LICENSE. Instead, [js/stencils.min.js](../src/main/webapp/js/stencils.min.js) (3.9 MB) holds a map of 204 stencil files (`f['aws4.xml'] = '<compact encoding>'`) and overrides `mxStencilRegistry.loadStencil` to decode them from memory. When a style names `shape=mxgraph.<pkg>.<name>`, the registry resolves `mxStencilRegistry.libraries[pkg]` ([diagramly/Editor.js:12906](../src/main/webapp/js/diagramly/Editor.js#L12885)) to the stencil and shape files to load ([§6.3](#63-graph-grapheditorgraphjs)). The XML stencil language is documented in [mxStencil](../src/main/webapp/mxgraph/src/shape/mxStencil.js). `EditShapeDialog` lets users author inline stencils.
 
 ### 8.3 Raster and SVG image libraries (`img/lib/`)
 
@@ -719,7 +717,7 @@ draw.io runs in five distinct deployment shapes, all from the same code:
 
 ### 9.1 The embed `postMessage` protocol
 
-With `?embed=1&proto=json`, the editor posts `{event:'init'}` to its parent or opener when ready ([EditorUi.js:28903](../src/main/webapp/js/diagramly/EditorUi.js#L28903)). Without `proto=json` it posts the legacy string `ready`. The host then sends JSON **actions**, and the editor answers with **events**. Messages are accepted only from `this.embedMessageSource || window.opener || window.parent`. The handler is [EditorUi.installMessageHandler](../src/main/webapp/js/diagramly/EditorUi.js#L27267).
+With `?embed=1&proto=json`, the editor posts `{event:'init'}` to its parent or opener when ready ([EditorUi.js:28903](../src/main/webapp/js/diagramly/EditorUi.js#L28387)). Without `proto=json` it posts the legacy string `ready`. The host then sends JSON **actions**, and the editor answers with **events**. Messages are accepted only from `this.embedMessageSource || window.opener || window.parent`. The handler is [EditorUi.installMessageHandler](../src/main/webapp/js/diagramly/EditorUi.js#L26751).
 
 | Host → editor `action` | Effect |
 |---|---|
@@ -735,9 +733,9 @@ With `?embed=1&proto=json`, the editor posts `{event:'init'}` to its parent or o
 | `remoteInvoke`, `remoteInvokeReady`, `remoteInvokeResponse` | Generic RPC in both directions (`EditorUi.remoteInvoke`) |
 | `configure` (with `configure=1`) | Sent **before** `init`, handled by `App.main` ([§4.5](#45-appmain-the-startup-sequence)) |
 
-Events sent by the editor include `init`, `load`, **`save`** (from the Save button or Ctrl+S, built in [diagramly/Menus.js:3228](../src/main/webapp/js/diagramly/Menus.js#L3228)), **`autosave`** (on every change when `autosave: 1`), **`exit`** (with `modified`), `export`, `openLink` (with `suppressNewWindows`), `shortcut` (host pass-through keys), `resize` (inline mode), `scrollWheel`, `template`, `prompt`, `draft`, `textContent`, `merge`/`patch`/`getDiff`/`resetDiff` replies, and `configure`. The file object in this mode is an [EmbedFile](../src/main/webapp/js/diagramly/EmbedFile.js) (mode `embed`). The host is the storage.
+Events sent by the editor include `init`, `load`, **`save`** (from the Save button or Ctrl+S, built in [diagramly/Menus.js:3228](../src/main/webapp/js/diagramly/Menus.js#L3130)), **`autosave`** (on every change when `autosave: 1`), **`exit`** (with `modified`), `export`, `openLink` (with `suppressNewWindows`), `shortcut` (host pass-through keys), `resize` (inline mode), `scrollWheel`, `template`, `prompt`, `draft`, `textContent`, `merge`/`patch`/`getDiff`/`resetDiff` replies, and `configure`. The file object in this mode is an [EmbedFile](../src/main/webapp/js/diagramly/EmbedFile.js) (mode `embed`). The host is the storage.
 
-Embed-only URL parameters include `spin`, `modified`, `keepmodified`, `saveAndExit`, `noSaveBtn`, `noExitBtn`, `returnbounds`, `libraries`, `configure`, `ui`, `dark`, `lang`, `pages`, `stealth`, `embedRT` (realtime in embed) and `fast-sync`. `App.blockedAncestorFrames` refuses certain framing origins.
+Embed-only URL parameters include `spin`, `modified`, `keepmodified`, `saveAndExit`, `noSaveBtn`, `noExitBtn`, `returnbounds`, `libraries`, `configure`, `ui`, `dark`, `pages`, `stealth`, `embedRT` (realtime in embed) and `fast-sync`. `App.blockedAncestorFrames` refuses certain framing origins.
 
 ### 9.2 The viewer (`GraphViewer.js`) and lightbox
 
@@ -880,7 +878,7 @@ All exports run in the browser. **VSDX export and server-side export (the `EXPOR
 
 ---
 
-## 13. Static Assets, Styling, i18n and Offline Support
+## 13. Static Assets, Styling, UI Text and Offline Support
 
 ### 13.1 CSS and themes (`styles/`)
 
@@ -898,9 +896,9 @@ All exports run in the browser. **VSDX export and server-side export (the `EXPOR
 
 [images/](../src/main/webapp/images/) holds UI icons, logos (Google Drive, OneDrive, GitHub, GitLab, Trello), sidebar preview sprites (`sidebar-*.png`), the PWA icons, [images/manifest.json](../src/main/webapp/images/manifest.json) (PWA manifest with `file_handlers`) and `browserconfig.xml`. [mxgraph/images/](../src/main/webapp/mxgraph/images/) holds the handle and cursor images. [img/](../src/main/webapp/img/) holds shape icons ([§8.3](#83-raster-and-svg-image-libraries-imglib)). [shortcuts.svg](../src/main/webapp/shortcuts.svg) is the keyboard-shortcut reference sheet, and [favicon.ico](../src/main/webapp/favicon.ico) is the favicon.
 
-### 13.3 Internationalisation (`resources/`)
+### 13.3 UI Text (`resources/`)
 
-[resources/dia.txt](../src/main/webapp/resources/dia.txt) is the **English source of every UI string** (~2,600 `key=value` lines). `dia_<lang>.txt` holds the translations for ~60 languages, and `dia_i18n.txt` is a pseudo-language whose value is the key itself (useful for finding where a string is used). Strings are looked up with `mxResources.get('key', [params])`, where `{1}` placeholders are filled in. The language is chosen in `diagramly/Init.js` ([§4.4](#44-runtime-configuration-globals-preconfigjs-initjs--2-postconfigjs)), and only one bundle is fetched at startup (`mxResources.loadDefaultBundle = false`). Configuration `resources` overrides strings at runtime (`Editor.applyCustomResources`). Plugins add their own strings with `mxResources.parse('key=Value')`. Rules for translators are in [resources/CONTRIBUTING.md](../src/main/webapp/resources/CONTRIBUTING.md). Run `python3 etc/i18n/check-translations.py` to find missing keys. **When you add a UI string, add it to `dia.txt`.** The language files can lag; missing keys fall back to English.
+[resources/dia.txt](../src/main/webapp/resources/dia.txt) holds **every UI string** (~2,600 `key=value` lines, English). The UI is English only ([CHG-002](CHANGES.md#chg-002--english-only-user-interface)): there are no translation files, `mxLanguage` is always `'en'` ([§4.4](#44-runtime-configuration-globals-preconfigjs-initjs--2-postconfigjs)), and `App.main` fetches this one bundle at startup (`mxResources.loadDefaultBundle = false`). Strings are looked up with `mxResources.get('key', [params])`, where `{1}` placeholders are filled in. Configuration `resources` overrides strings at runtime (`Editor.applyCustomResources`). Plugins add their own strings with `mxResources.parse('key=Value')`. **When you add a UI string, add it to `dia.txt`.** The *diagram language* feature (`Graph.diagramLanguage`, `label_xx` attributes, *Extras → Diagram Language*) translates diagram content, not the UI, and is unaffected. The `'languageChanged'` event still has listeners but nothing fires it any more.
 
 ### 13.4 Templates (`templates/`)
 
@@ -916,13 +914,13 @@ All exports run in the browser. **VSDX export and server-side export (the `EXPOR
 
 ### 13.7 PWA / service worker
 
-[service-worker.js](../src/main/webapp/service-worker.js) is **generated** (by `GenerateServiceWorker.java`, which is not in this repo) from a `workbox-config*.js` file. Its header says not to edit it by hand. It reproduces Workbox 7.2's precaching without the Workbox runtime, so existing caches stay valid. It precaches a manifest of every app file with MD5 revisions (cache-first, query parameters ignored), lazily caches language bundles (the `warmLazy` message from `App.main`), supports `warmDev` for offline dev mode, and calls `skipWaiting`. `workbox-05b6c01b.js` and the `.map` files are no longer referenced. Release channels: `?channel=stable` registers `stable/service-worker.js` ([§4.5](#45-appmain-the-startup-sequence)). `clear.html` unregisters it. **If you change the set of shipped files, the service worker must be regenerated**, or offline users keep stale files.
+[service-worker.js](../src/main/webapp/service-worker.js) is **generated** (by `GenerateServiceWorker.java`, which is not in this repo) from a `workbox-config*.js` file. Its header says not to edit it by hand. It reproduces Workbox 7.2's precaching without the Workbox runtime, so existing caches stay valid. It precaches a manifest of every app file with MD5 revisions (cache-first, query parameters ignored), lazily caches the entries of `LAZY_MANIFEST` (the `warmLazy` message from `App.main`; it still lists the deleted `dia_xx.txt` files until the worker is regenerated, see CHG-002), supports `warmDev` for offline dev mode, and calls `skipWaiting`. `workbox-05b6c01b.js` and the `.map` files are no longer referenced. Release channels: `?channel=stable` registers `stable/service-worker.js` ([§4.5](#45-appmain-the-startup-sequence)). `clear.html` unregisters it. **If you change the set of shipped files, the service worker must be regenerated**, or offline users keep stale files.
 
 ---
 
 ## 14. Plugins
 
-A plugin is a script that calls **`Draw.loadPlugin(function(ui) { … })`**, where `ui` is the `App`/`EditorUi` instance. Plugins usually add strings (`mxResources.parse`), actions (`ui.actions.addAction`), menu items (by wrapping `ui.menus.get('extras').funct`), or override prototypes. Loading is handled by [App.main](../src/main/webapp/js/diagramly/App.js#L1150) and [App.loadPlugins](../src/main/webapp/js/diagramly/App.js#L1809):
+A plugin is a script that calls **`Draw.loadPlugin(function(ui) { … })`**, where `ui` is the `App`/`EditorUi` instance. Plugins usually add strings (`mxResources.parse`), actions (`ui.actions.addAction`), menu items (by wrapping `ui.menus.get('extras').funct`), or override prototypes. Loading is handled by [App.main](../src/main/webapp/js/diagramly/App.js#L1150) and [App.loadPlugins](../src/main/webapp/js/diagramly/App.js#L1788):
 
 - `?p=id1;id2` loads IDs from **`App.pluginRegistry`** ([App.js:327](../src/main/webapp/js/diagramly/App.js#L327)).
 - Plugins saved in settings (*Extras → Plugins*, `PluginsDialog`) are loaded only if they are same-origin **and** built in, unless `ALLOW_CUSTOM_PLUGINS = true`.
@@ -1076,7 +1074,7 @@ Everything observable is an `mxEventSource`. Use `obj.addListener('name', functi
 | `graph` | `mxEvent.CLICK`, `DOUBLE_CLICK`, `CELLS_ADDED`, `CELLS_MOVED`, `CELLS_RESIZED`, `EDITING_STARTED/STOPPED`, `ROOT`, `SIZE`, `ESCAPE`, `FIRE_MOUSE_EVENT`, `'cellsArranged'` |
 | `graph.getSelectionModel()` | `mxEvent.CHANGE` |
 | `editor` | `'statusChanged'`, `'resetGraphView'`, `'fileLoaded'`, `'autosaveChanged'`, `'updateGraphComponents'` |
-| `editorUi` | `'styleChanged'`, `'currentThemeChanged'`, `'darkModeChanged'`, `'languageChanged'`, `'pageSelected'`, `'pagesPatched'`, `'clientLoaded'`, `'fileDescriptorChanged'`, `'gridEnabledChanged'`, `'backgroundColorChanged'`, … |
+| `editorUi` | `'styleChanged'`, `'currentThemeChanged'`, `'darkModeChanged'`, `'languageChanged'` (no longer fired, CHG-002), `'pageSelected'`, `'pagesPatched'`, `'clientLoaded'`, `'fileDescriptorChanged'`, `'gridEnabledChanged'`, `'backgroundColorChanged'`, … |
 | `file` (DrawioFile) | `'descriptorChanged'`, `'contentChanged'`, `'realtimeMessage'`, `'realtimeStateChanged'` |
 
 ### 17.3 Style strings
@@ -1123,13 +1121,13 @@ New dialogs should use `CustomDialog` and `ui.showDialog(dlg.container, width, n
 | **Add a built-in shape** | Subclass in [grapheditor/Shapes.js](../src/main/webapp/js/grapheditor/Shapes.js) (or a `shapes/*.js` file for a domain shape), `mxCellRenderer.registerShape('name', Ctor)`, connection points via `prototype.constraints`/`getConstraints`, handles via `Graph.handleFactory`, then add a sidebar entry ([§8](#8-shapes-stencils-and-shape-libraries)). |
 | **Add a shape library** | New `diagramly/sidebar/Sidebar-X.js` with `Sidebar.prototype.addXPalette`, registered in `sidebar/Sidebar.js` (`configuration`, `initPalettes`), plus `Devel.js` and `build.xml` ([§8.4](#84-sidebar-libraries-jsdiagramlysidebar)). |
 | **Add a Format panel option** | The relevant panel in [Format.js](../src/main/webapp/js/grapheditor/Format.js): `createCellOption(label, styleKey, default)` or `createColorOption`. Read selection info from `ui.getSelectionState()` (extend `EditorUi.updateSelectionStateForCell` if new information is needed). |
-| **Add a configuration key** | Handle it in [Editor.configure](../src/main/webapp/js/diagramly/Editor.js#L2972) (set an `Editor.*` static or prototype default), and expose it in `ConfigEditor.js` if it should be editable visually. |
+| **Add a configuration key** | Handle it in [Editor.configure](../src/main/webapp/js/diagramly/Editor.js#L2964) (set an `Editor.*` static or prototype default), and expose it in `ConfigEditor.js` if it should be editable visually. |
 | **Add a URL parameter** | Read `urlParams['name']`. Normalise or derive it in `diagramly/Init.js` if it affects startup. Never let URL parameters choose endpoints or keys ([§16](#16-security-model)). |
-| **Add an embed protocol action** | Add a `data.action == 'x'` branch in [EditorUi.installMessageHandler](../src/main/webapp/js/diagramly/EditorUi.js#L27267), reply with `parent.postMessage(JSON.stringify({event: 'x', …}), '*')`, and keep the source check. |
+| **Add an embed protocol action** | Add a `data.action == 'x'` branch in [EditorUi.installMessageHandler](../src/main/webapp/js/diagramly/EditorUi.js#L26751), reply with `parent.postMessage(JSON.stringify({event: 'x', …}), '*')`, and keep the source check. |
 | **Add a storage back-end** | A `DrawioClient` subclass (auth, `getFile`, `insertFile`, `saveFile`, pickers), a `DrawioFile` subclass (`getHash`, `getMode`, `saveFile`, …) and a `*Library`, plus a mode in `App.storages` with a unique hash `char`, creation in `App.init`, and dispatch in `App.createFile`/`pickFile`/`getServiceForName` ([§10](#10-files-storage-back-ends-and-libraries)). |
 | **Change what is saved in files** | Diagram-level attributes: `Editor.getGraphXml`/`readGraphState` (and `Graph.getViewState`/`saveViewState` for per-page state). File-level: `EditorUi.createFileData`/`getXmlFileData`. Keep DiffSync's `viewStateProperties` in sync so collaboration carries the new property. |
 | **Change default look** | [styles/default.xml](../src/main/webapp/styles/default.xml) (diagram defaults), [styles/grapheditor.css](../src/main/webapp/styles/grapheditor.css) `:root` variables (UI), or the `defaultVertexStyle`/`defaultEdgeStyle`/`css` configuration keys. |
-| **Add or modify UI text** | Edit `resources/dia.txt` (English). Translations fall back to English. Run `etc/i18n/check-translations.py`. |
+| **Add or modify UI text** | Edit `resources/dia.txt`, the only UI string bundle (English only, CHG-002). |
 | **Write a plugin** | `Draw.loadPlugin(function(ui) { … })` in `plugins/x.js`, registered in `App.pluginRegistry` (and `App.publicPlugin` to list it) or allowed through `ALLOW_CUSTOM_PLUGINS` ([§14](#14-plugins)). |
 | **Self-host configuration** | `PreConfig.js` (`DRAWIO_CONFIG`, base URLs), `WEB-INF/*_client_id/secret`, and the environment variables in [§15.6](#156-deployment-configuration). |
 | **Update a vendored library** | Replace the file in `js/<lib>/`, follow that folder's README (e.g. CryptoJS, pako, libavoid), run `etc/dependencies/dompurify-smoke.js` for DOMPurify, bump `etc/dependencies/package.json`, rebuild. |

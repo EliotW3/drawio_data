@@ -1,13 +1,9 @@
-# draw.io translation resources
+# UI resources
 
-Internationalization resource files for [draw.io](https://github.com/jgraph/drawio).
+`dia.txt` holds every UI string of the application as `key=value` lines
+(English). Strings are looked up with `mxResources.get('key', [params])`,
+where `{1}`, `{2}`, ... are placeholders.
 
-## Contributing
-
-Translation improvements and new language contributions are welcome via pull requests. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-## Structure
-
-- `dia.txt` - English (source language, defines all keys)
-- `dia_{lang}.txt` - Translations (e.g. `dia_fr.txt`, `dia_ja.txt`)
-- `dia_i18n.txt` - Key reference file
+This fork is English only (see `docs/CHANGES.md`, CHG-002): there are no
+translation files and the UI language cannot be changed. When you add a UI
+string, add it to `dia.txt`.

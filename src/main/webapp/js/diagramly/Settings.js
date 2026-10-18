@@ -17,14 +17,6 @@ var mxSettings =
 	// NOTE: Hardcoded in index.html due to timing of JS loading
 	key: Editor.settingsKey,
 
-	getLanguage: function()
-	{
-		return mxSettings.settings.language;
-	},
-	setLanguage: function(lang)
-	{
-		mxSettings.settings.language = lang;
-	},
 	isMainSettings: function()
 	{
 		return mxSettings.key == '.drawio-config';
@@ -332,7 +324,6 @@ var mxSettings =
 	getDefaults: function()
 	{
 		return {
-			language: '',
 			configVersion: Editor.configVersion,
 			customFonts: [],
 			libraries: Sidebar.prototype.defaultEntries,

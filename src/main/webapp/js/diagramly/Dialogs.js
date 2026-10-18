@@ -293,16 +293,6 @@ var SplashDialog = function(editorUi)
 	var div = document.createElement('div');
 	div.style.textAlign = 'center';
 	
-	if (mxClient.IS_CHROMEAPP || EditorUi.isElectronApp)
-	{
-		var elt = editorUi.addLanguageMenu(div, false, '28px');
-		
-		if (elt != null)
-		{
-			elt.style.bottom = '24px';
-		}
-	}
-	
 	var logo = document.createElement('img');
 	logo.setAttribute('border', '0');
 	logo.setAttribute('align', 'absmiddle');
@@ -4777,11 +4767,6 @@ var CreateDialog = function(editorUi, title, createFn, cancelFn, dlgTitle, btnLa
 	
 	var showButtons = true;
 	
-	if (cancelFn == null)
-	{
-		editorUi.addLanguageMenu(div);
-	}
-
 	var h3 = document.createElement('h3');
 	mxUtils.write(h3, dlgTitle || mxResources.get('create'));
 	div.appendChild(h3);
