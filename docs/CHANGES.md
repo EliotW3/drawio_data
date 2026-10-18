@@ -6,7 +6,7 @@ The upstream release log is [ChangeLog](../ChangeLog) in the repository root. Do
 
 ## How to record a change
 
-- Add a new entry at the **top** of [Change entries](#change-entries) with the next ID (`CHG-011`, `CHG-012`, …), and add a row to the [Change index](#change-index).
+- Add a new entry at the **top** of [Change entries](#change-entries) with the next ID (`CHG-012`, `CHG-013`, …), and add a row to the [Change index](#change-index).
 - Fill in every heading of the template below. Write "None" rather than deleting a heading.
 - Reference [ARCHITECTURE.md](ARCHITECTURE.md) sections by number (e.g. "§12.2") and update those sections in the same change, so that the architecture guide always describes the current code.
 - List anything left unfinished under **Follow-ups**, and keep [Open follow-ups](#open-follow-ups) in sync until the item is resolved.
@@ -35,6 +35,7 @@ The upstream release log is [ChangeLog](../ChangeLog) in the repository root. Do
 
 | ID | Date | Title | Status |
 |---|---|---|---|
+| [CHG-011](#chg-011--desktop-build-workflow-tests-on-linux-node-24-actions) | 2026-10-18 | Desktop build workflow: tests on Linux, Node 24 actions | Done |
 | [CHG-010](#chg-010--installer-option-for-drawio-files-usage-instructions) | 2026-10-18 | Installer option for .drawio files; usage instructions | Done |
 | [CHG-009](#chg-009--windows-desktop-app) | 2026-10-18 | Windows desktop app | Done, follow-ups pending |
 | [CHG-008](#chg-008--data-flow-cardinalities-use-m-for-many) | 2026-10-18 | Data flow cardinalities use M for "many" | Done |
@@ -60,6 +61,43 @@ The upstream release log is [ChangeLog](../ChangeLog) in the repository root. Do
 ---
 
 ## Change entries
+
+### CHG-011 — Desktop build workflow: tests on Linux, Node 24 actions
+
+- **Date:** 2026-10-18
+- **Status:** Done
+- **ARCHITECTURE.md sections affected:** §21.1
+
+**Motivation**
+
+The first run of *Desktop app (Windows)* failed:
+- **The real failure:** its "Test the main process" step failed on `windows-latest`. The draw.io desktop tests assume POSIX paths, and upstream only runs them on macOS and Linux; on Linux all of them pass. The install step passed, and the build was skipped.
+- **A warning, not the cause:** GitHub also warned that `actions/checkout@v4` and `actions/setup-node@v4` target the deprecated Node 20.
+
+**What changed for users**
+
+None. The installer is the same.
+
+**What changed in the code**
+
+| File | Change |
+|---|---|
+| [.github/workflows/desktop-windows.yml](../.github/workflows/desktop-windows.yml) | Split into a `test` job (`ubuntu-latest`, `npm test`) and a `build` job (`windows-latest`, `npm run dist-win`, upload, release) that runs only after `test` passes. Actions moved to their Node 24 versions: `actions/checkout@v6`, `actions/setup-node@v6`, `actions/upload-artifact@v6`, `softprops/action-gh-release@v3` (checked to declare `node24`). |
+
+**Impact on the codebase**
+
+The Windows build no longer runs the main-process tests on Windows. That matches upstream, and the tests still gate the build.
+
+**Verification**
+
+- The failing step was identified from the run's job data (run 39158031468, job "build": step 5 "Test the main process" failed, steps 6–8 skipped).
+- `npm test` passes locally on Linux (273 passed, 1 skipped).
+- The workflow file parses, and every action version was checked to exist and run on Node 24.
+- The new workflow has not run yet; that needs a push.
+
+**Follow-ups**
+
+None.
 
 ### CHG-010 — Installer option for .drawio files; usage instructions
 
