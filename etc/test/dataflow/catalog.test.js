@@ -106,12 +106,12 @@
 
 		t.eq(report.attributes, [woId]);
 		t.eq(report.relationships, [rel]);
-		t.eq(report.flagged.sort(), [val, filter].sort());
+		t.eq(report.flagged.sort(), [val, filter, exp].sort(), 'the export that copied it too');
 		t.ok(c.getAttribute(derived).derivedFrom == null, 'lineage cleared');
 		t.ok(c.getAttribute(derived) != null, 'copy kept');
 		t.eq(c.getAction(val).config.pairs[0].attributes, []);
 		t.eq(c.getAction(filter).config.dropped.attributes, []);
-		t.ok(c.needsAttention(val) && c.needsAttention(filter) && !c.needsAttention(exp));
+		t.ok(c.needsAttention(val) && c.needsAttention(filter) && c.needsAttention(exp));
 		t.eq(c.getAction(val).attention, [{code: 'attributeRemoved', id: woId}]);
 		t.eq(c.getDataset(x.wo).attributes.length, 2);
 	});

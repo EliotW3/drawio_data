@@ -1,7 +1,7 @@
 /**
  * Minimal in-page test harness for run.js. Test files call
  * DataFlowTest.test(name, fn), where fn receives the assertion helpers and
- * the EditorUi. Each test starts with a new blank file.
+ * the EditorUi. Each test starts with a new blank file. A test may return a Promise.
  */
 var DataFlowTest = window.DataFlowTest = {tests: []};
 
@@ -21,7 +21,11 @@ DataFlowTest.getUi = function()
  */
 DataFlowTest.newFile = function(ui)
 {
-	ui.hideDialog();
+	while (ui.dialogs != null && ui.dialogs.length > 0)
+	{
+		ui.hideDialog();
+	}
+
 	ui.fileLoaded(new LocalFile(ui, ui.emptyDiagramXml, 'test.drawio', true), true);
 	ui.editor.undoManager.clear();
 };
@@ -63,23 +67,60 @@ DataFlowTest.run = function()
 {
 	var ui = DataFlowTest.getUi();
 	var results = [];
+	var index = 0;
 
-	for (var i = 0; i < DataFlowTest.tests.length; i++)
+	function fail(t, e)
 	{
-		var t = DataFlowTest.tests[i];
+		results.push({name: t.name, ok: false, error: e.message +
+			((e.stack != null) ? '\n      ' + e.stack.split('\n').slice(0, 3).join('\n      ') : '')});
+	};
+
+	// Tests run one after another; a test may return a Promise
+	function next()
+	{
+		if (index >= DataFlowTest.tests.length)
+		{
+			return Promise.resolve(results);
+		}
+
+		var t = DataFlowTest.tests[index++];
 
 		try
 		{
 			DataFlowTest.newFile(ui);
-			t.fn(DataFlowTest.assert, ui);
+			var r = t.fn(DataFlowTest.assert, ui);
+
+			if (r != null && typeof r.then === 'function')
+			{
+				return r.then(function()
+				{
+					results.push({name: t.name, ok: true});
+				}, function(e)
+				{
+					fail(t, e);
+				}).then(next);
+			}
+
 			results.push({name: t.name, ok: true});
 		}
 		catch (e)
 		{
-			results.push({name: t.name, ok: false, error: e.message +
-				((e.stack != null) ? '\n      ' + e.stack.split('\n').slice(0, 3).join('\n      ') : '')});
+			fail(t, e);
 		}
-	}
 
-	return results;
+		return next();
+	};
+
+	return next();
+};
+
+/**
+ * Returns a Promise that resolves after the given milliseconds.
+ */
+DataFlowTest.wait = function(ms)
+{
+	return new Promise(function(resolve)
+	{
+		window.setTimeout(resolve, ms);
+	});
 };

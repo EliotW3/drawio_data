@@ -109,6 +109,49 @@ DataFlow.ATTRIBUTE_STYLE = 'text;dataflow=attribute;html=1;whiteSpace=wrap;' +
 	'deletable=0;editable=0;rotatable=0;cloneable=0;connectable=0;';
 
 /**
+ * Actions (docs/DATAFLOW.md §5.4): colour, shape, glyph and size per type.
+ * Labels sit inside the shapes, which keeps every action a single built-in
+ * shape (no custom shapes, see §5.3). Ports: input left, second input
+ * bottom (Validation, Addition), output right.
+ */
+DataFlow.ACTIONS = {
+	'export': {color: '#2563EB', width: 100, height: 40, glyph: ' &#10140;', glyphAfter: true,
+		shape: 'rounded=1;arcSize=24;', points: '[[0,0.5],[1,0.5]]'},
+	'filter': {color: '#D97706', width: 100, height: 40, glyph: '&#9662; ',
+		shape: 'shape=trapezoid;perimeter=trapezoidPerimeter;size=0.15;fixedSize=0;flipV=1;',
+		points: '[[0,0.5],[1,0.5]]'},
+	'validation': {color: '#059669', width: 120, height: 40, glyph: '&#10003; ',
+		shape: 'shape=hexagon;perimeter=hexagonPerimeter2;size=0.16;fixedSize=0;',
+		points: '[[0,0.5],[0.5,1],[1,0.5]]'},
+	'addition': {color: '#7C3AED', width: 110, height: 40, glyph: '+ ',
+		shape: 'ellipse;perimeter=ellipsePerimeter;', points: '[[0,0.5],[0.5,1],[1,0.5]]'}
+};
+
+DataFlow.COLORS.attention = '#F59E0B';
+DataFlow.COLORS.edge = '#475569';
+DataFlow.COLORS.invalid = '#DC2626';
+
+/**
+ * Base style of action shapes, completed per type and state by
+ * DataFlowView.getActionStyle.
+ */
+DataFlow.ACTION_STYLE = 'dataflow=action;html=1;whiteSpace=wrap;fontSize=12;' +
+	'editable=0;rotatable=0;resizable=0;';
+
+/**
+ * Flow edges and the styles of their roles (§5.5).
+ */
+DataFlow.FLOW_STYLE = 'dataflow=flow;html=1;edgeStyle=orthogonalEdgeStyle;rounded=1;' +
+	'endArrow=block;endFill=1;strokeWidth=2;editable=0;strokeColor=' + DataFlow.COLORS.edge + ';';
+
+DataFlow.FLOW_ROLE_STYLES = {
+	'primary': 'entryX=0;entryY=0.5;entryDx=0;entryDy=0;',
+	'secondary': 'entryX=0.5;entryY=1;entryDx=0;entryDy=0;dashed=1;dashPattern=6 4;',
+	'output': '',
+	'invalid': 'dashed=1;dashPattern=2 3;strokeColor=' + DataFlow.COLORS.invalid + ';'
+};
+
+/**
  * Returns true if the given value is a valid entity ID.
  */
 DataFlow.isValidId = function(id)

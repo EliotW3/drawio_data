@@ -1,6 +1,6 @@
 # draw.io (`drawio_data`) — Architecture and Code Guide
 
-> A reference to how this fork of draw.io works, organised so that each subsystem has a stable section number to cite in discussions and change requests (e.g. "see §7.1 file format"). Code locations are given as repository-relative links. The document was written against upstream **version 32.5.5** (see [VERSION](../VERSION)). Line numbers were last updated with CHG-004 and will drift as the code changes. Function names are the reliable anchors.
+> A reference to how this fork of draw.io works, organised so that each subsystem has a stable section number to cite in discussions and change requests (e.g. "see §7.1 file format"). Code locations are given as repository-relative links. The document was written against upstream **version 32.5.5** (see [VERSION](../VERSION)). Line numbers were last updated with CHG-005 and will drift as the code changes. Function names are the reliable anchors.
 >
 > **Fork changes** are recorded in [CHANGES.md](CHANGES.md) (one `CHG-NNN` entry per change, with its impact). When a change alters behaviour described here, the relevant section is updated in the same change and notes the entry ID.
 
@@ -1178,7 +1178,7 @@ A fork-only feature for visualising data flow between systems. The agreed design
 |---|---|
 | 1. Catalog (storage, integrity rules, undo) | **Done** (CHG-003) |
 | 2. Systems & datasets (palette, dialogs, shapes, editing, deletion) | **Done** (CHG-004) |
-| 3. Actions | Not started |
+| 3. Actions (four actions, connection rules, streams, dialogs, lineage, validation highlight, needs-setup/attention) | **Done** (CHG-005) |
 | 4. Model view | Not started |
 | 5. Hardening | Not started |
 
@@ -1190,8 +1190,9 @@ The sources are in [js/diagramly/dataflow/](../src/main/webapp/js/diagramly/data
 |---|---|
 | [DataFlow.js](../src/main/webapp/js/diagramly/dataflow/DataFlow.js) | `DataFlow` namespace: the catalog attribute name and version, action types, cardinalities, the ID pattern, and the colours, sizes and [cell styles](../src/main/webapp/js/diagramly/dataflow/DataFlow.js#L88) of every shape |
 | [DataFlowCatalog.js](../src/main/webapp/js/diagramly/dataflow/DataFlowCatalog.js) | The catalog class and its storage on the page |
-| [DataFlowView.js](../src/main/webapp/js/diagramly/dataflow/DataFlowView.js) | Catalog → cells: creates system, dataset and attribute-row cells, and `sync` re-renders every shape from the catalog |
-| [DataFlowDialogs.js](../src/main/webapp/js/diagramly/dataflow/DataFlowDialogs.js) | System and Dataset dialogs, the attribute editor |
+| [DataFlowStreams.js](../src/main/webapp/js/diagramly/dataflow/DataFlowStreams.js) | Connection rules, streams and action states (no changes to the model) |
+| [DataFlowView.js](../src/main/webapp/js/diagramly/dataflow/DataFlowView.js) | Catalog → cells: creates system, dataset, attribute-row and action cells; `sync` re-renders every shape and edge from the catalog |
+| [DataFlowDialogs.js](../src/main/webapp/js/diagramly/dataflow/DataFlowDialogs.js) | System, Dataset, Export, Filter, Validation and Addition dialogs; the attribute editor, the stream tree and the mapping rows |
 | [DataFlowUi.js](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js) | Editor integration (`ui.dataFlow`): palette, drop handling, double-click, context menu, deletion, drop rules |
 
 ### 20.2 The catalog
@@ -1231,21 +1232,46 @@ Because the catalog lives on the root cell:
 - **Attribute rows:** text cells inside a dataset, one per attribute. They can't be moved, deleted or edited on their own.
 - **Entity text** is always HTML-escaped before it goes into a label.
 
-**Sync.** [DataFlowView.update](../src/main/webapp/js/diagramly/dataflow/DataFlowView.js#L402) runs a catalog edit and then [sync](../src/main/webapp/js/diagramly/dataflow/DataFlowView.js#L333) in the same transaction. Sync updates labels and tooltips, rebuilds attribute rows that no longer match the catalog, and removes the shapes of entities that no longer exist (D17). One undo therefore reverts the entity and all its shapes.
+**Actions and flow edges.**
+- **Action shape:** one built-in shape per type (rounded box, inverted trapezoid, hexagon, ellipse; [DataFlow.ACTIONS](../src/main/webapp/js/diagramly/dataflow/DataFlow.js#L117)). The label is inside: glyph and name, a V-number badge for validations, and an amber "!" when the action needs attention. The value carries `dfType="action"`, `dfId` and `dfAction` (the type).
+- **Needs setup:** while connections are missing or the dialog is not done, the shape is a dashed outline. Its tooltip says what is missing or what no longer matches.
+- **Flow edges** carry `dfType="flow"` and a role in `dfRole`: `primary` (enters left), `secondary` (enters at the bottom, dashed), `output` (action → system) or `invalid` (red dashed, with the reason as tooltip). [syncEdge](../src/main/webapp/js/diagramly/dataflow/DataFlowView.js#L445) sets the role and style. It keeps a role while it stays valid, and gives the bottom port or a taken primary input the secondary role.
 
-**Editor hooks** ([DataFlowUi.init](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L20)):
+**Streams and rules** ([DataFlowStreams.js](../src/main/webapp/js/diagramly/dataflow/DataFlowStreams.js)):
+- [getConnection](../src/main/webapp/js/diagramly/dataflow/DataFlowStreams.js#L167) applies the rules of DATAFLOW.md §6.2, including loops through action-to-action edges.
+- [getNodeStream](../src/main/webapp/js/diagramly/dataflow/DataFlowStreams.js#L267) computes what flows on: a system shape passes its datasets, a Validation its input, an Addition its input plus the added dataset. Export and Filter continue from their target system.
+- [getActionState](../src/main/webapp/js/diagramly/dataflow/DataFlowStreams.js#L417) returns missing connections, whether the dialog is done, and problems: catalog `attention` flags, plus inputs that no longer contain what the configuration uses.
+
+**Dialogs and apply.**
+- [configureAction](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L828) opens the dialog of the type.
+- `applyExport` and `applyFilter` create or update the output datasets in the target system. [setDerivedAttributes](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L919) keeps attribute IDs per source, so lineage and relationships survive re-configuring, makes names unique, and keeps hand-added attributes. Each shows its dataset in the target system shape.
+- `applyValidation` stores the pairs.
+- `applyAddition` replaces the Addition's relationships.
+- Unchecking a dataset in a Filter deletes its copy (an explicit choice). Upstream changes never delete outputs.
+
+**Sync.** [DataFlowView.update](../src/main/webapp/js/diagramly/dataflow/DataFlowView.js#L656) runs a catalog edit and then [sync](../src/main/webapp/js/diagramly/dataflow/DataFlowView.js#L557) in the same transaction. Sync updates labels and tooltips, rebuilds attribute rows that no longer match the catalog, and removes the shapes of entities that no longer exist (D17). One undo therefore reverts the entity and all its shapes.
+
+**Editor hooks** ([DataFlowUi.init](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L21)):
 
 | Hook | Behaviour |
 |---|---|
 | `Sidebar.init` | Adds the *Data Flow* palette (System, Dataset) above *General*. It is always shown and is not in the library configuration. |
-| [Sidebar.createDropHandler](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L630) | Dropping or clicking a palette item (a cell with `dfTemplate`) opens a dialog instead of inserting cells. A Dataset needs a system: the drop target, or the selected system when clicked. Its drop position sets its place in the stack. |
+| [Sidebar.createDropHandler](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L1334) | Dropping or clicking a palette item (a cell with `dfTemplate`) opens a dialog instead of inserting cells. A Dataset needs a system: the drop target, or the selected system when clicked. Its drop position sets its place in the stack. |
 | `mxEvent.DOUBLE_CLICK` | Opens the System or Dataset dialog. A row opens its dataset. Label editing is off (`editable=0`). |
-| `mxEvent.REMOVE_CELLS` | Inside the removal transaction, [cellsRemoved](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L257) deletes the entities whose last shape was removed (D19). |
+| `mxEvent.REMOVE_CELLS` | Inside the removal transaction, [cellsRemoved](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L372) deletes the entities whose last shape was removed (D19). |
 | `graph.isValidDropTarget` | A system accepts only its own datasets, a dataset accepts nothing, and datasets can't be dropped anywhere else. |
 | `graphHandler.shouldRemoveCellsFromParent` | Datasets can't be dragged out of their system. |
-| `Menus.createPopupMenu` | Context menu: *Edit System…*, *Add Dataset…*, *Edit Dataset…*, *Delete Everywhere…* |
+| `Menus.createPopupMenu` | Context menu: *Edit System…*, *Add Dataset…*, *Edit Dataset…*, *Delete Everywhere…*, *Configure Action…* |
+| `mxEvent.CELLS_ADDED` | Copied action shapes (paste, duplicate, Ctrl+drag) get a new, unconfigured action. An action has one shape. |
+| `mxEvent.CELL_CONNECTED` | Any connection touching a data flow node re-syncs, which sets edge roles and action states. |
+| `graph.getEdgeValidationError` / `validationAlert` | Refuses connections that break the rules while dragging, and explains why in a dialog instead of `window.alert`. |
+| `connectionHandler` `CONNECT` | Opens the action's dialog once its last required connection is made. |
+| [graph.deleteCells](../src/main/webapp/js/diagramly/dataflow/DataFlowUi.js#L721) | Asks before a delete whose cascade removes relationships or changes actions beyond the selection. |
+| Selection and model changes | Selecting a Validation dims every shape it doesn't compare (opacity on the SVG nodes only, not a model change). |
 
-**Public methods** (used by the dialogs and the tests): `placeSystem`, `placeDataset`, `editSystem`, `editDataset`, `deleteEntity`, `showSystemDialog`, `showDatasetDialog`, `editCell`.
+**Public methods** (used by the dialogs and the tests): `placeSystem`, `placeDataset`, `placeAction`, `editSystem`, `editDataset`, `deleteEntity`, `showSystemDialog`, `showDatasetDialog`, `configureAction`, `applyExport`, `applyFilter`, `applyValidation`, `applyAddition`, `editCell`.
+
+**Re-entrancy.** `DataFlowUi.update` counts nested calls (`updating`). The `CELLS_ADDED`, `CELL_CONNECTED` and `REMOVE_CELLS` handlers ignore changes made by its own updates and by `sync` (`DataFlowView.syncing`).
 
 **Folding.** Datasets stay `resizable`, because `Graph.isCellFoldable` refuses non-resizable containers. The stack layout sets their size anyway.
 
@@ -1264,4 +1290,5 @@ node run.js http://127.0.0.1:8080/           # built bundles
 - Snap Firefox needs `DATAFLOW_TEST_PROFILE` pointing to a folder under `~/snap/firefox/common`.
 - [catalog.test.js](../etc/test/dataflow/catalog.test.js) covers entities, cascades, sanitising and hostile keys.
 - [storage.test.js](../etc/test/dataflow/storage.test.js) covers the page root, undo/redo, save/load (plain and compressed), pages and damaged files.
+- [actions.test.js](../etc/test/dataflow/actions.test.js) covers the action palette and states, every connection rule, edge roles and styles, the four actions through their apply functions and dialogs, lineage, highlighting and focus, needs-attention, the delete confirmation, copying and deleting actions, rewiring, auto-opening and save/load.
 - [ui.test.js](../etc/test/dataflow/ui.test.js) covers the palette, placement, label escaping, folding and layout, edits shown on every shape, deletion, drop rules, double-click, both dialogs (including pasting attributes and validation) and the context menu.

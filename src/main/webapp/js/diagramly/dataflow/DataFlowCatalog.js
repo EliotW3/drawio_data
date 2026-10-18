@@ -1152,8 +1152,8 @@ DataFlowCatalog.prototype.setDerivedFrom = function(id, sourceId)
 
 /**
  * Removes an attribute with its relationships. Attributes derived from it
- * lose their lineage, and actions that referenced it are flagged. Returns
- * the removal report.
+ * lose their lineage, and actions that referenced it or created those
+ * copies are flagged. Returns the removal report.
  */
 DataFlowCatalog.prototype.removeAttribute = function(id, report)
 {
@@ -1171,6 +1171,14 @@ DataFlowCatalog.prototype.removeAttribute = function(id, report)
 	for (var i = 0; i < derived.length; i++)
 	{
 		this.attributes[derived[i]].derivedFrom = null;
+
+		// The Export or Filter that made the copy no longer matches its input
+		var origin = this.datasets[this.attributes[derived[i]].dataset].origin;
+
+		if (origin != null && this.actions[origin.action] != null)
+		{
+			this.flagAction(origin.action, 'attributeRemoved', id, report);
+		}
 	}
 
 	for (var xId in this.actions)

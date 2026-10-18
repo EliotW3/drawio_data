@@ -1,6 +1,6 @@
 # Data Flow Diagrams: Design Spec
 
-> Status: **agreed 2026-10-18**. Phases 1 (catalog, CHG-003) and 2 (systems and datasets, CHG-004) are implemented. What exists is described in [ARCHITECTURE.md §20](ARCHITECTURE.md#20-data-flow-diagrams-fork-feature-in-progress). Implementation is tracked as CHG entries in [CHANGES.md](CHANGES.md), one per phase ([§11](#11-phases)), and the finished feature gets its own section in [ARCHITECTURE.md](ARCHITECTURE.md).
+> Status: **agreed 2026-10-18**. Phases 1 (catalog, CHG-003), 2 (systems and datasets, CHG-004) and 3 (actions, CHG-005) are implemented. What exists is described in [ARCHITECTURE.md §20](ARCHITECTURE.md#20-data-flow-diagrams-fork-feature-in-progress). Implementation is tracked as CHG entries in [CHANGES.md](CHANGES.md), one per phase ([§11](#11-phases)), and the finished feature gets its own section in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 1. Goal
 
@@ -155,6 +155,8 @@ Whenever an entity changes (rename, attributes added/removed/reordered), the vie
 | **Addition** | Circle with a plus | 1 stream (primary) + 1 system (second) | Optional: stream + added dataset, to the next action |
 
 - **Ports:** the primary input is on the left, the secondary input (reference/second) is at the bottom, and the output is on the right.
+- *As built:* the name sits **inside** the shape with a glyph (`▾ Filter`, `✓ Validation`, `+ Addition`, `Export ➜`), not below it as in the mock-up. One cell has one label, and a glyph-only shape plus an outside label would need a second cell or a custom shape (see §5.3). The funnel is an inverted trapezoid, a built-in shape.
+- *As built:* a Validation's colour badge (V1, V2, …) is in its label and on every compared dataset's shape.
 - **Placement:** a newly placed action shows a dashed outline and a "needs setup" badge until its inputs/outputs are connected and its dialog is completed. Its dialog opens automatically once the required connections exist, or on double-click.
 - **Dialogs:**
   - **Export:** a tree of the incoming stream (dataset → attribute check boxes), the new dataset's name, and the target system (taken from the output connection).
@@ -170,7 +172,7 @@ Whenever an entity changes (rename, attributes added/removed/reordered), the vie
 
 - **Flow edges** are orthogonal with an arrow.
 - **Secondary-input edges** (Validation reference, Addition second) are dashed.
-- **Connecting** goes through the rules in [§6.2](#62-connection-rules). Invalid connections are refused while dragging, with a tooltip explaining why.
+- **Connecting** goes through the rules in [§6.2](#62-connection-rules). Invalid connections are refused while dragging, with a tooltip explaining why. *As built:* the target is marked invalid while dragging, and releasing shows the reason in a message. A connection made another way (for example pasted) that breaks the rules is drawn red and dashed, with the reason as its tooltip.
 
 ## 6. Streams and connection rules
 
@@ -200,7 +202,8 @@ Suppose an Export's source dataset loses an attribute, or the connection feeding
 
 - The action keeps its configuration and shows a **needs attention** badge, listing what no longer matches.
 - Opening the dialog shows the current stream with the stale items highlighted.
-- Outputs that already exist (Export/Filter datasets) are **never deleted automatically**. Only lineage pointers to deleted attributes are cleared ([§4.3](#43-integrity-rules-enforced-by-one-module)).
+- Outputs that already exist (Export/Filter datasets) are **never deleted automatically**. Only lineage pointers to deleted attributes are cleared ([§4.3](#43-integrity-rules-enforced-by-one-module)), and the Export or Filter that made the copy is flagged.
+- *As built:* unchecking a dataset in a Filter's own dialog deletes that dataset's copy. That is an explicit choice, not an upstream change. Re-applying an Export or Filter keeps the IDs of attributes whose source is still selected, so their lineage and relationships survive.
 
 ## 7. Model view
 
@@ -247,7 +250,7 @@ Lineage edges are read-only.
 | An **action** | The action is deleted. Datasets it created **stay**, with their `origin` cleared and their lineage kept. *Relationships* an Addition created are deleted with it. |
 | *Delete everywhere* (context menu or dialog) | Deletes the entity and all its shapes immediately. |
 
-Every deletion that cascades beyond the selected shapes asks for confirmation and lists what else goes. All of it is one undo step. *As built (phase 2):* *Delete Everywhere…* and removing attributes that are in use ask for confirmation. The plain Delete key does not ask yet. Its cascades only reach relationships and actions, which appear in phases 3–4, so the confirmation comes with phase 3.
+Every deletion that cascades beyond the selected shapes asks for confirmation and lists what else goes. All of it is one undo step. *As built:* *Delete Everywhere…*, removing attributes that are in use, and the plain Delete key all ask when the cascade removes relationships or changes actions beyond the selection.
 
 ## 9. Visual style
 

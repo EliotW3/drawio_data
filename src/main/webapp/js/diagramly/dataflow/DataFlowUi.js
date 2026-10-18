@@ -11,6 +11,7 @@ function DataFlowUi(ui)
 {
 	this.ui = ui;
 	this.graph = ui.editor.graph;
+	this.updating = 0;
 	this.init();
 };
 
@@ -25,10 +26,115 @@ DataFlowUi.prototype.init = function()
 	// Removing shapes removes the entities that have no shapes left (D19)
 	graph.addListener(mxEvent.REMOVE_CELLS, function(sender, evt)
 	{
-		if (!DataFlowView.syncing)
+		if (!DataFlowView.syncing && self.updating == 0)
 		{
 			self.cellsRemoved(evt.getProperty('cells'));
 		}
+	});
+
+	// Copies of action shapes (paste, duplicate, clone) get their own action
+	graph.addListener(mxEvent.CELLS_ADDED, function(sender, evt)
+	{
+		if (!DataFlowView.syncing && self.updating == 0)
+		{
+			self.cellsAdded(evt.getProperty('cells'));
+		}
+	});
+
+	// Connecting applies the connection rules and updates the action states
+	graph.addListener(mxEvent.CELL_CONNECTED, function(sender, evt)
+	{
+		var edge = evt.getProperty('edge');
+
+		if (!DataFlowView.syncing && self.updating == 0 && edge != null &&
+			(DataFlowView.getType(edge) == DataFlowView.FLOW ||
+			DataFlowStreams.isNode(graph.model.getTerminal(edge, true)) ||
+			DataFlowStreams.isNode(graph.model.getTerminal(edge, false))))
+		{
+			self.update(function() {});
+		}
+	});
+
+	// Refuses connections that break the rules while dragging (§6.2)
+	var graphGetEdgeValidationError = graph.getEdgeValidationError;
+
+	graph.getEdgeValidationError = function(edge, source, target)
+	{
+		var conn = DataFlowStreams.getConnection(this, edge, source, target, false);
+
+		if (conn != null && conn.error != null)
+		{
+			return conn.error;
+		}
+
+		return graphGetEdgeValidationError.apply(this, arguments);
+	};
+
+	// Explains a refused connection in a dialog instead of window.alert
+	graph.validationAlert = function(message)
+	{
+		if (message != null && message.length > 0)
+		{
+			self.ui.alert(message);
+		}
+	};
+
+	// Opens the action dialog once its connections are complete
+	graph.connectionHandler.addListener(mxEvent.CONNECT, function(sender, evt)
+	{
+		var edge = evt.getProperty('cell');
+
+		window.setTimeout(function()
+		{
+			if (graph.model.contains(edge) && self.ui.dialog == null)
+			{
+				var target = graph.model.getTerminal(edge, false);
+				var source = graph.model.getTerminal(edge, true);
+				var cells = [target, source];
+
+				for (var i = 0; i < cells.length; i++)
+				{
+					if (DataFlowView.getType(cells[i]) == DataFlowView.ACTION &&
+						DataFlowStreams.getMissingConnections(graph, cells[i]).length == 0 &&
+						!DataFlowStreams.isConfigured(self.getCatalog(), DataFlowView.getId(cells[i])))
+					{
+						self.configureAction(cells[i]);
+						break;
+					}
+				}
+			}
+		}, 0);
+	});
+
+	// Asks before a delete that removes relationships or changes actions
+	var graphDeleteCells = graph.deleteCells;
+
+	graph.deleteCells = function(cells, includeEdges)
+	{
+		var msg = self.getDeleteImpactMessage(cells);
+
+		if (msg != null)
+		{
+			self.ui.confirm(msg, function()
+			{
+				graphDeleteCells.call(graph, cells, includeEdges);
+			}, null, mxResources.get('delete'));
+
+			return null;
+		}
+
+		return graphDeleteCells.apply(this, arguments);
+	};
+
+	// Selecting a Validation dims everything it does not compare
+	graph.getSelectionModel().addListener(mxEvent.CHANGE, function()
+	{
+		self.updateFocus();
+	});
+
+	graph.model.addListener(mxEvent.CHANGE, function()
+	{
+		self.updateFocus();
 	});
 
 	// Double click edits the system or dataset instead of the label
@@ -140,7 +246,16 @@ DataFlowUi.prototype.getCatalog = function()
  */
 DataFlowUi.prototype.update = function(fn)
 {
-	return DataFlowView.update(this.graph, fn);
+	this.updating++;
+
+	try
+	{
+		return DataFlowView.update(this.graph, fn);
+	}
+	finally
+	{
+		this.updating--;
+	}
 };
 
 /**
@@ -259,11 +374,14 @@ DataFlowUi.prototype.cellsRemoved = function(cells)
 	var graph = this.graph;
 	var systems = [];
 	var datasets = [];
+	var actions = [];
+	var touched = false;
 
 	function collect(cell)
 	{
 		var type = DataFlowView.getType(cell);
 		var id = DataFlowView.getId(cell);
+		touched = touched || type != null;
 
 		if (type == DataFlowView.SYSTEM && mxUtils.indexOf(systems, id) < 0)
 		{
@@ -272,6 +390,10 @@ DataFlowUi.prototype.cellsRemoved = function(cells)
 		else if (type == DataFlowView.DATASET && mxUtils.indexOf(datasets, id) < 0)
 		{
 			datasets.push(id);
+		}
+		else if (type == DataFlowView.ACTION && mxUtils.indexOf(actions, id) < 0)
+		{
+			actions.push(id);
 		}
 
 		for (var i = 0; i < graph.model.getChildCount(cell); i++)
@@ -285,10 +407,19 @@ DataFlowUi.prototype.cellsRemoved = function(cells)
 		collect(cells[i]);
 	}
 
-	if (systems.length > 0 || datasets.length > 0)
+	if (touched)
 	{
 		this.update(function(catalog)
 		{
+			for (var i = 0; i < actions.length; i++)
+			{
+				if (catalog.getAction(actions[i]) != null &&
+					DataFlowView.getCells(graph, DataFlowView.ACTION, actions[i]).length == 0)
+				{
+					catalog.removeAction(actions[i]);
+				}
+			}
+
 			for (var i = 0; i < datasets.length; i++)
 			{
 				if (catalog.getDataset(datasets[i]) != null &&
@@ -320,6 +451,11 @@ DataFlowUi.prototype.templateDropped = function(template, target, x, y, clicked)
 	if (template == DataFlowView.SYSTEM)
 	{
 		this.showSystemDialog(null, x - DataFlow.SYSTEM_WIDTH / 2, y - DataFlow.SYSTEM_HEADER / 2);
+	}
+	else if (DataFlow.ACTIONS[template] != null)
+	{
+		var spec = DataFlow.ACTIONS[template];
+		this.placeAction(template, x - spec.width / 2, y - spec.height / 2);
 	}
 	else if (template == DataFlowView.DATASET)
 	{
@@ -444,6 +580,10 @@ DataFlowUi.prototype.editCell = function(cell)
 	{
 		this.showDatasetDialog(null, null, cell);
 	}
+	else if (type == DataFlowView.ACTION)
+	{
+		this.configureAction(cell);
+	}
 };
 
 /**
@@ -490,7 +630,16 @@ DataFlowUi.prototype.addPopupMenuItems = function(menu, cell)
 	{
 		menu.addSeparator();
 
-		if (type == DataFlowView.SYSTEM)
+		if (type == DataFlowView.ACTION)
+		{
+			menu.addItem(mxResources.get('dfConfigureAction') + '...', null, function()
+			{
+				self.editCell(cell);
+			});
+
+			return;
+		}
+		else if (type == DataFlowView.SYSTEM)
 		{
 			menu.addItem(mxResources.get('dfEditSystem') + '...', null, function()
 			{
@@ -518,6 +667,539 @@ DataFlowUi.prototype.addPopupMenuItems = function(menu, cell)
 };
 
 /**
+ * Gives copied action shapes (paste, duplicate, Ctrl+drag) a new, empty
+ * action: an action has exactly one shape.
+ */
+DataFlowUi.prototype.cellsAdded = function(cells)
+{
+	var graph = this.graph;
+	var added = [];
+
+	for (var i = 0; cells != null && i < cells.length; i++)
+	{
+		added = added.concat(graph.model.filterDescendants(function(cell)
+		{
+			return DataFlowView.getType(cell) == DataFlowView.ACTION;
+		}, cells[i]));
+	}
+
+	if (added.length > 0)
+	{
+		this.update(function(catalog)
+		{
+			for (var i = 0; i < added.length; i++)
+			{
+				var cell = added[i];
+				var id = DataFlowView.getId(cell);
+				var others = DataFlowView.getCells(graph, DataFlowView.ACTION, id).filter(function(other)
+				{
+					return other != cell;
+				});
+
+				if (catalog.getAction(id) == null || others.length > 0)
+				{
+					var type = cell.value.getAttribute('dfAction');
+
+					if (DataFlow.ACTIONS[type] != null)
+					{
+						var value = cell.value.cloneNode(true);
+						value.setAttribute('dfId', catalog.addAction(type));
+						graph.model.setValue(cell, value);
+					}
+				}
+			}
+		});
+	}
+};
+
+/**
+ * Returns the question to ask before deleting the given cells, or null if
+ * the delete does not reach beyond them: entities whose last shapes go are
+ * removed on a copy of the catalog, and relationships removed or actions
+ * changed by that are counted.
+ */
+DataFlowUi.prototype.getDeleteImpactMessage = function(cells)
+{
+	var graph = this.graph;
+	var model = graph.model;
+	var deleted = [];
+
+	for (var i = 0; cells != null && i < cells.length; i++)
+	{
+		deleted = deleted.concat(model.filterDescendants(function() { return true; }, cells[i]));
+	}
+
+	var entities = deleted.filter(function(cell)
+	{
+		var type = DataFlowView.getType(cell);
+
+		return type == DataFlowView.SYSTEM || type == DataFlowView.DATASET || type == DataFlowView.ACTION;
+	});
+
+	if (entities.length == 0)
+	{
+		return null;
+	}
+
+	var catalog = this.getCatalog();
+	var report = DataFlowCatalog.createReport();
+	var done = [];
+
+	for (var i = 0; i < entities.length; i++)
+	{
+		var type = DataFlowView.getType(entities[i]);
+		var id = DataFlowView.getId(entities[i]);
+		var last = DataFlowView.getCells(graph, type, id).every(function(cell)
+		{
+			return mxUtils.indexOf(deleted, cell) >= 0;
+		});
+
+		if (last && mxUtils.indexOf(done, id) < 0)
+		{
+			done.push(id);
+
+			if (type == DataFlowView.SYSTEM && catalog.getSystem(id) != null)
+			{
+				catalog.removeSystem(id, report);
+			}
+			else if (type == DataFlowView.DATASET && catalog.getDataset(id) != null)
+			{
+				catalog.removeDataset(id, report);
+			}
+			else if (type == DataFlowView.ACTION && catalog.getAction(id) != null)
+			{
+				catalog.removeAction(id, report);
+			}
+		}
+	}
+
+	var flagged = report.flagged.filter(function(id)
+	{
+		return mxUtils.indexOf(report.actions, id) < 0;
+	});
+
+	// Relationships of a deleted Addition go with it and are not a surprise
+	var relationships = report.relationships.length;
+
+	if (relationships > 0 || flagged.length > 0)
+	{
+		var own = 0;
+
+		for (var i = 0; i < report.actions.length; i++)
+		{
+			own += this.getCatalog().getRelationshipIds(null, report.actions[i]).length;
+		}
+
+		if (relationships - own > 0 || flagged.length > 0)
+		{
+			return mxResources.get('dfDeleteImpact', [relationships - own, flagged.length]);
+		}
+	}
+
+	return null;
+};
+
+/**
+ * Places an action shape with its top left corner at the given point.
+ * Returns the new cell.
+ */
+DataFlowUi.prototype.placeAction = function(type, x, y)
+{
+	var graph = this.graph;
+
+	var cell = this.update(function(catalog)
+	{
+		var id = catalog.addAction(type);
+		var cell = DataFlowView.createActionCell(catalog, id, Math.round(x), Math.round(y));
+		graph.addCell(cell, graph.getDefaultParent());
+
+		return cell;
+	});
+
+	graph.setSelectionCell(cell);
+	graph.scrollCellToVisible(cell);
+
+	return cell;
+};
+
+/**
+ * Opens the dialog of an action, or explains which connections it lacks.
+ */
+DataFlowUi.prototype.configureAction = function(cell)
+{
+	var self = this;
+	var graph = this.graph;
+	var ui = this.ui;
+	var missing = DataFlowStreams.getMissingConnections(graph, cell);
+
+	if (missing.length > 0)
+	{
+		ui.alert(mxResources.get('dfConnectFirst') + ' ' + missing.map(function(key)
+		{
+			return mxResources.get(key);
+		}).join(' '));
+
+		return null;
+	}
+
+	var catalog = this.getCatalog();
+	var id = DataFlowView.getId(cell);
+	var action = catalog.getAction(id);
+	var input = DataFlowStreams.getInputStream(graph, catalog, cell);
+
+	if (input == null || input.length == 0)
+	{
+		ui.alert(mxResources.get('dfInputEmpty'));
+
+		return null;
+	}
+
+	function systemName(systemCell)
+	{
+		return catalog.getSystem(DataFlowView.getId(systemCell)).name;
+	};
+
+	if (action.type == DataFlow.ACTION_EXPORT)
+	{
+		var target = DataFlowStreams.getOutputSystem(graph, cell);
+		var output = catalog.getDataset(action.config.dataset);
+
+		return DataFlowDialogs.showExportDialog(ui, catalog, input, systemName(target),
+			(output != null && output.system == DataFlowView.getId(target)) ? output : null, function(result)
+		{
+			self.applyExport(cell, result);
+		});
+	}
+	else if (action.type == DataFlow.ACTION_FILTER)
+	{
+		return DataFlowDialogs.showFilterDialog(ui, catalog, input,
+			systemName(DataFlowStreams.getOutputSystem(graph, cell)), action.config, function(result)
+		{
+			self.applyFilter(cell, result);
+		});
+	}
+
+	var secondCell = DataFlowStreams.getInputNode(graph, cell, DataFlowStreams.SECONDARY);
+	var second = DataFlowView.getDatasetIds(graph, secondCell);
+
+	if (second.length == 0)
+	{
+		ui.alert(mxResources.get('dfSecondEmpty'));
+
+		return null;
+	}
+
+	if (action.type == DataFlow.ACTION_VALIDATION)
+	{
+		return DataFlowDialogs.showValidationDialog(ui, catalog, input, second, systemName(secondCell),
+			action.config, function(result)
+		{
+			self.applyValidation(cell, result);
+		});
+	}
+
+	var existing = catalog.getRelationshipIds(null, id).map(function(relId)
+	{
+		return catalog.getRelationship(relId);
+	});
+
+	return DataFlowDialogs.showAdditionDialog(ui, catalog, input, second, systemName(secondCell),
+		action.config, existing, function(result)
+	{
+		self.applyAddition(cell, result);
+	});
+};
+
+/**
+ * Makes the attributes of a dataset copies of the given source attributes
+ * (with lineage). Attributes already derived from a source are kept (with
+ * their name), attributes without lineage (added by hand) stay at the end,
+ * and names are made unique with the source dataset's name.
+ */
+DataFlowUi.prototype.setDerivedAttributes = function(catalog, datasetId, sources)
+{
+	var dataset = catalog.getDataset(datasetId);
+	var bySource = DataFlowCatalog.createMap();
+	var manual = [];
+
+	for (var i = 0; i < dataset.attributes.length; i++)
+	{
+		var aId = dataset.attributes[i];
+		var src = catalog.getAttribute(aId).derivedFrom;
+
+		if (src == null)
+		{
+			manual.push(aId);
+		}
+		else if (bySource[src] == null)
+		{
+			bySource[src] = aId;
+		}
+	}
+
+	var used = DataFlowCatalog.createMap();
+	var entries = [];
+
+	function unique(name, suffix)
+	{
+		var result = name;
+
+		if (used[result.toLowerCase()] && suffix != null)
+		{
+			result = name + ' (' + suffix + ')';
+		}
+
+		for (var n = 2; used[result.toLowerCase()]; n++)
+		{
+			result = name + ' ' + n;
+		}
+
+		used[result.toLowerCase()] = true;
+
+		return result;
+	};
+
+	for (var i = 0; i < sources.length; i++)
+	{
+		var existing = bySource[sources[i]];
+		var source = catalog.getAttribute(sources[i]);
+		entries.push({id: (existing != null) ? existing : null,
+			name: unique((existing != null) ? catalog.getAttribute(existing).name : source.name,
+				catalog.getDataset(source.dataset).name)});
+	}
+
+	for (var i = 0; i < manual.length; i++)
+	{
+		entries.push({id: manual[i], name: unique(catalog.getAttribute(manual[i]).name)});
+	}
+
+	var result = catalog.setDatasetAttributes(datasetId, entries);
+
+	for (var i = 0; i < sources.length; i++)
+	{
+		if (entries[i].id == null)
+		{
+			catalog.setDerivedFrom(result.ids[i], sources[i]);
+		}
+	}
+};
+
+/**
+ * Adds a shape of the dataset to the system shape unless it has one.
+ */
+DataFlowUi.prototype.ensureDatasetShape = function(catalog, systemCell, datasetId)
+{
+	if (mxUtils.indexOf(DataFlowView.getDatasetIds(this.graph, systemCell), datasetId) < 0)
+	{
+		this.graph.addCell(DataFlowView.createDatasetCell(catalog, datasetId), systemCell);
+	}
+};
+
+/**
+ * Applies the Export dialog: creates or updates the output dataset in the
+ * target system, with lineage, and shows it there.
+ */
+DataFlowUi.prototype.applyExport = function(cell, result)
+{
+	var self = this;
+	var graph = this.graph;
+	var id = DataFlowView.getId(cell);
+
+	this.update(function(catalog)
+	{
+		var system = DataFlowStreams.getOutputSystem(graph, cell);
+		var systemId = DataFlowView.getId(system);
+		var datasetId = catalog.getAction(id).config.dataset;
+		var dataset = catalog.getDataset(datasetId);
+
+		if (dataset == null || dataset.system != systemId)
+		{
+			datasetId = catalog.addDataset(systemId, result.name, null, id);
+		}
+		else
+		{
+			catalog.renameDataset(datasetId, result.name);
+		}
+
+		self.setDerivedAttributes(catalog, datasetId, result.attributes);
+		catalog.setActionConfig(id, {dataset: datasetId});
+		self.ensureDatasetShape(catalog, system, datasetId);
+	});
+};
+
+/**
+ * Applies the Filter dialog: one copy per kept dataset in the target system,
+ * with the kept attributes and lineage. Copies of datasets that are no
+ * longer kept are deleted.
+ */
+DataFlowUi.prototype.applyFilter = function(cell, result)
+{
+	var self = this;
+	var graph = this.graph;
+	var id = DataFlowView.getId(cell);
+
+	this.update(function(catalog)
+	{
+		var system = DataFlowStreams.getOutputSystem(graph, cell);
+		var systemId = DataFlowView.getId(system);
+		var old = catalog.getAction(id).config.copies;
+		var input = DataFlowStreams.getInputStream(graph, catalog, cell) || [];
+		var copies = {};
+		var dropped = {datasets: [], attributes: []};
+
+		for (var i = 0; i < result.kept.length; i++)
+		{
+			var src = result.kept[i].dataset;
+			var copyId = old[src];
+			var copy = catalog.getDataset(copyId);
+
+			if (copy == null || copy.system != systemId)
+			{
+				copyId = catalog.addDataset(systemId, catalog.getDataset(src).name, null, id);
+			}
+
+			self.setDerivedAttributes(catalog, copyId, result.kept[i].attributes);
+			copies[src] = copyId;
+			self.ensureDatasetShape(catalog, system, copyId);
+		}
+
+		for (var src in old)
+		{
+			if (copies[src] == null && catalog.getDataset(old[src]) != null)
+			{
+				catalog.removeDataset(old[src]);
+			}
+		}
+
+		for (var i = 0; i < input.length; i++)
+		{
+			var kept = null;
+
+			for (var j = 0; j < result.kept.length; j++)
+			{
+				if (result.kept[j].dataset == input[i].dataset)
+				{
+					kept = result.kept[j];
+				}
+			}
+
+			if (kept == null)
+			{
+				dropped.datasets.push(input[i].dataset);
+			}
+			else
+			{
+				dropped.attributes = dropped.attributes.concat(input[i].attributes.filter(function(aId)
+				{
+					return mxUtils.indexOf(kept.attributes, aId) < 0;
+				}));
+			}
+		}
+
+		catalog.setActionConfig(id, {copies: copies, dropped: dropped});
+	});
+};
+
+/**
+ * Applies the Validation dialog.
+ */
+DataFlowUi.prototype.applyValidation = function(cell, result)
+{
+	var id = DataFlowView.getId(cell);
+
+	this.update(function(catalog)
+	{
+		catalog.setActionConfig(id, {color: catalog.getAction(id).config.color, pairs: result.pairs});
+	});
+};
+
+/**
+ * Applies the Addition dialog: the added dataset and its relationships,
+ * which replace the ones this addition created before.
+ */
+DataFlowUi.prototype.applyAddition = function(cell, result)
+{
+	var id = DataFlowView.getId(cell);
+
+	this.update(function(catalog)
+	{
+		var old = catalog.getRelationshipIds(null, id);
+
+		for (var i = 0; i < old.length; i++)
+		{
+			catalog.removeRelationship(old[i]);
+		}
+
+		for (var i = 0; i < result.mappings.length; i++)
+		{
+			var m = result.mappings[i];
+			catalog.addRelationship(m.from, m.to, m.cardinality, id);
+		}
+
+		catalog.setActionConfig(id, {dataset: result.dataset});
+	});
+};
+
+/**
+ * Dims everything a selected Validation does not compare (§9): the shapes
+ * of the compared datasets, the Validation and its edges stay as they are.
+ */
+DataFlowUi.prototype.updateFocus = function()
+{
+	var graph = this.graph;
+	var cell = (graph.getSelectionCount() == 1) ? graph.getSelectionCell() : null;
+	var keep = null;
+
+	if (DataFlowStreams.getActionType(cell) == DataFlow.ACTION_VALIDATION)
+	{
+		var action = this.getCatalog().getAction(DataFlowView.getId(cell));
+
+		if (action != null)
+		{
+			var ids = [];
+
+			for (var i = 0; i < action.config.pairs.length; i++)
+			{
+				ids.push(action.config.pairs[i].primary, action.config.pairs[i].reference);
+			}
+
+			keep = [cell].concat(graph.model.getEdges(cell));
+
+			for (var i = 0; i < ids.length; i++)
+			{
+				var shapes = DataFlowView.getCells(graph, DataFlowView.DATASET, ids[i]);
+
+				for (var j = 0; j < shapes.length; j++)
+				{
+					keep = keep.concat(graph.model.filterDescendants(function() { return true; }, shapes[j]));
+				}
+			}
+		}
+	}
+
+	if (keep != null || this.focused)
+	{
+		this.focused = keep != null;
+
+		graph.view.states.visit(function(key, state)
+		{
+			var opacity = (keep == null || mxUtils.indexOf(keep, state.cell) >= 0 ||
+				state.cell == graph.model.getRoot() || graph.model.isLayer(state.cell)) ? '' : '0.18';
+			var nodes = [(state.shape != null) ? state.shape.node : null,
+				(state.text != null) ? state.text.node : null];
+
+			for (var i = 0; i < nodes.length; i++)
+			{
+				if (nodes[i] != null)
+				{
+					nodes[i].style.opacity = opacity;
+				}
+			}
+		});
+	}
+};
+
+/**
  * Returns a palette template: a system with one dataset, or a dataset.
  */
 DataFlowUi.createTemplate = function(type)
@@ -532,6 +1214,17 @@ DataFlowUi.createTemplate = function(type)
 
 		return v;
 	};
+
+	if (DataFlow.ACTIONS[type] != null)
+	{
+		var spec = DataFlow.ACTIONS[type];
+		var action = new mxCell(value(DataFlowView.getActionLabel(new DataFlowCatalog(), null, type, null)),
+			new mxGeometry(0, 0, spec.width, spec.height),
+			DataFlowView.getActionStyle(type, {setup: false, problems: []}));
+		action.vertex = true;
+
+		return action;
+	}
 
 	var dataset = new mxCell(value(DataFlowView.getDatasetLabel({name:
 		mxResources.get('dfDataset'), attributes: [1, 2, 3]})),
@@ -609,6 +1302,17 @@ DataFlowUi.createTemplate = function(type)
 					mxResources.get('dfDataset'), true);
 			})
 		];
+
+		DataFlow.ACTION_TYPES.forEach(function(type)
+		{
+			var spec = DataFlow.ACTIONS[type];
+
+			fns.push(sb.addEntry(tags + 'action ' + type, function()
+			{
+				return sb.createVertexTemplateFromCells([DataFlowUi.createTemplate(type)],
+					spec.width, spec.height, mxResources.get('dfAction_' + type), true);
+			}));
+		});
 
 		this.addPaletteFunctions('dataflow', mxResources.get('dfDataFlow'), true, fns);
 

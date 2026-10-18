@@ -4146,3 +4146,53 @@ span.geCommentsBadge {
 .geDialog .geDataFlowAttrAdd {
 	margin: 8px 0 6px 0;
 }
+
+/* Data flow diagrams: dataset/attribute tree (Export, Filter) and attribute mapping (Validation, Addition) */
+.geDataFlowTree {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 280px;
+	overflow-y: auto;
+}
+
+.geDataFlowTreeDataset,
+.geDataFlowTreeAttribute {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 24px;
+}
+
+.geDataFlowTreeDataset:not(:first-child) {
+	margin-top: 6px;
+}
+
+.geDataFlowTreeAttribute {
+	padding-left: 22px;
+}
+
+.geDataFlowMapping {
+	max-height: 220px;
+	overflow-y: auto;
+}
+
+.geDataFlowMapRow {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 6px;
+	min-height: 28px;
+}
+
+.geDataFlowMapRow > span:first-child {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	line-height: normal;
+}
+
+.geDataFlowMapTitle {
+	font-weight: 600;
+	margin-top: 8px;
+}

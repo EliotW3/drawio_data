@@ -6,7 +6,7 @@ The upstream release log is [ChangeLog](../ChangeLog) in the repository root. Do
 
 ## How to record a change
 
-- Add a new entry at the **top** of [Change entries](#change-entries) with the next ID (`CHG-005`, `CHG-006`, …), and add a row to the [Change index](#change-index).
+- Add a new entry at the **top** of [Change entries](#change-entries) with the next ID (`CHG-006`, `CHG-007`, …), and add a row to the [Change index](#change-index).
 - Fill in every heading of the template below. Write "None" rather than deleting a heading.
 - Reference [ARCHITECTURE.md](ARCHITECTURE.md) sections by number (e.g. "§12.2") and update those sections in the same change, so that the architecture guide always describes the current code.
 - List anything left unfinished under **Follow-ups**, and keep [Open follow-ups](#open-follow-ups) in sync until the item is resolved.
@@ -35,6 +35,7 @@ The upstream release log is [ChangeLog](../ChangeLog) in the repository root. Do
 
 | ID | Date | Title | Status |
 |---|---|---|---|
+| [CHG-005](#chg-005--data-flow-diagrams-phase-3-actions) | 2026-10-18 | Data flow diagrams, phase 3: actions | Done |
 | [CHG-004](#chg-004--data-flow-diagrams-phase-2-systems-and-datasets) | 2026-10-18 | Data flow diagrams, phase 2: systems and datasets | Done, follow-ups pending |
 | [CHG-003](#chg-003--data-flow-diagrams-phase-1-the-catalog) | 2026-10-18 | Data flow diagrams, phase 1: the catalog | Done |
 | [CHG-002](#chg-002--english-only-user-interface) | 2026-10-18 | English-only user interface (remove all translations and language selection) | Done, follow-ups pending (service worker) |
@@ -51,6 +52,69 @@ The upstream release log is [ChangeLog](../ChangeLog) in the repository root. Do
 ---
 
 ## Change entries
+
+### CHG-005 — Data flow diagrams, phase 3: actions
+
+- **Date:** 2026-10-18
+- **Status:** Done
+- **ARCHITECTURE.md sections affected:** §20
+
+**Motivation**
+
+Phase 3 of [DATAFLOW.md](DATAFLOW.md): the four actions (Export, Filter, Validation, Addition), the connection rules, and the streams that carry datasets from one action to the next.
+
+**What changed for users**
+
+| Feature | After |
+|---|---|
+| Palette | Four action items: *Export*, *Filter*, *Validation*, *Addition*. Clicking or dropping places the shape directly. |
+| Connecting | Systems and actions connect by the rules of DATAFLOW.md §6.2. A disallowed target is marked while dragging, and releasing explains why. The second input of a Validation or Addition enters at the bottom and is dashed. |
+| Setup | A new action is a dashed outline whose tooltip lists the missing connections. Once the last one is made, its dialog opens. Double-click or *Configure Action…* reopens it. |
+| Export | Pick attributes from any incoming dataset. They become one new dataset in the target system, with lineage, shown in that system's shape. Duplicate names get the source dataset's name appended. |
+| Filter | Uncheck datasets or attributes to drop. Copies of the rest (same names) go to the target system, with lineage. |
+| Validation | Pair incoming datasets with the reference system's datasets, and attributes within each pair. Pairs are suggested by equal names, ignoring case. Compared datasets get an outline and a V-badge in the validation's colour. Selecting the Validation dims everything else. |
+| Addition | Pick a dataset of the second system and relate attributes with a cardinality. The added dataset flows on to the next action. |
+| Needs attention | When an input no longer has what an action uses, or something it used was deleted, the action gets an amber "!" and outline. The tooltip lists the problems. |
+| Deleting | The Delete key asks first when the cascade removes relationships or changes actions. Deleting an action keeps the datasets it created. Copied action shapes get their own new action. |
+
+**What changed in the code**
+
+| File | Change |
+|---|---|
+| `js/diagramly/dataflow/DataFlowStreams.js` | **New.** Connection rules, streams, missing connections, configured check, action state. |
+| `js/diagramly/dataflow/DataFlow.js` | Action and flow-edge styles and colours. |
+| `js/diagramly/dataflow/DataFlowView.js` | Action shapes, labels, tooltips and states; flow-edge roles and styles (`syncEdge`); validation badges and outlines on datasets. Removed entities' shapes now go with their edges (`graph.removeCells`). |
+| `js/diagramly/dataflow/DataFlowDialogs.js` | Export, Filter, Validation and Addition dialogs; stream tree; mapping rows. |
+| `js/diagramly/dataflow/DataFlowUi.js` | `placeAction`, `configureAction`, `apply*`, `setDerivedAttributes`; hooks for copies, connections, validation errors, auto-open, delete confirmation and validation focus (ARCHITECTURE.md §20.3). |
+| `js/diagramly/dataflow/DataFlowCatalog.js` | Removing an attribute also flags the Export or Filter that copied it (spec §6.3). The catalog test was updated. |
+| [resources/dia.txt](../src/main/webapp/resources/dia.txt), [styles/grapheditor.css](../src/main/webapp/styles/grapheditor.css) | 45 `df*` strings; tree and mapping CSS. |
+| [Devel.js](../src/main/webapp/js/diagramly/Devel.js), [build.xml](../etc/build/build.xml) | Load and compile `DataFlowStreams.js`. |
+| `etc/test/dataflow/actions.test.js`, `harness.js` | **New:** 16 tests (64 in total). The harness now runs tests that return a Promise and closes all dialogs between tests. |
+| `js/app.min.js`, `js/viewer*.min.js` | Rebuilt (the viewer bundles only for the strings). |
+| [docs/DATAFLOW.md](DATAFLOW.md) | As-built notes in §5.4, §5.5, §6.3 and §8. |
+
+**Impact on the codebase**
+
+- **Built-in shapes only.** Action shapes and edges use built-in draw.io shapes and styles only, so the viewer and exports render them (checked with `viewer-static.min.js`).
+- **Graph hooks.** `getEdgeValidationError`, `validationAlert` and `deleteCells` are wrapped per graph and only change behaviour for data flow cells. `validationAlert` now uses a draw.io dialog for every refused connection, which was `window.alert` before. Nothing else in draw.io returns validation errors.
+- **Not built as designed** (recorded in DATAFLOW.md):
+  - Action names are inside the shapes rather than below them.
+  - The funnel is an inverted trapezoid.
+  - A refused connection is explained on release rather than by a tooltip while dragging.
+
+**Verification**
+
+- `ant` builds with 0 errors.
+- `node run.js` passes **64/64** against the rebuilt bundles and in dev mode (twice).
+- Visual check in headless Firefox:
+  - the full example chain: SAP → Filter → Staging → Validation (CRM) → Addition (Asset Register) → Export → Warehouse;
+  - the Addition dialog;
+  - validation focus;
+  - the same file in `viewer-static.min.js`.
+
+**Follow-ups**
+
+None for this phase. Phase 4 (model view) is next.
 
 ### CHG-004 — Data flow diagrams, phase 2: systems and datasets
 
@@ -111,7 +175,7 @@ Phase 2 of [DATAFLOW.md](DATAFLOW.md): systems and datasets can now be placed on
 **Follow-ups**
 
 1. Cut and paste of data flow shapes (phase 5).
-2. Confirmation for the plain Delete key when a cascade reaches relationships or actions (phase 3).
+2. ~~Confirmation for the plain Delete key when a cascade reaches relationships or actions.~~ Done in CHG-005.
 3. Apply the style feedback on the mock-up (points A–F) once given.
 
 ### CHG-003 — Data flow diagrams, phase 1: the catalog
