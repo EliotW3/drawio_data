@@ -704,8 +704,11 @@
 		
 		editorUi.actions.put('exportPdf', new Action('formatPdf' + '...', function()
 		{
+			// PDF is exported through the browser print dialog. Only the desktop
+			// app renders PDF files directly, via its local export pipeline (see
+			// createDownloadRequest in ElectronApp.js).
 			editorUi.showPrintDialog(mxResources.get('formatPdf'),
-				(!EditorUi.isElectronApp && editorUi.isPrintPdfExport()) ?
+				(!EditorUi.isElectronApp) ?
 					null : mxUtils.bind(this, function(preview, args)
 					{
 						var pageCount = (editorUi.pages != null) ? editorUi.pages.length : 1;
@@ -1160,15 +1163,6 @@
 						}
 					}), true, defaultEditable, format, true);
 			}
-			else if (editorUi.isRemoteExportEnabled() && (!mxClient.IS_IOS || !navigator.standalone))
-			{
-				editorUi.showRemoteExportDialog(mxResources.get('export'), null, mxUtils.bind(this,
-					function(ignoreSelection, editable, transparent, scale, border)
-				{
-					editorUi.downloadFile((editable && format == 'png') ? 'xmlpng' : format,
-						null, null, ignoreSelection, null, null, transparent, scale, border);
-				}), false, true);
-			}
 		};
 		
 		editorUi.actions.put('exportPng', new Action('formatPng' + '...', function()
@@ -1441,46 +1435,6 @@
 			editorUi.showSearchWindow(graph.isEnabled() && (evt == null || !mxEvent.isShiftDown(evt)));
 		}), null, null, Editor.ctrlKey + '+F');
 		
-		var exportVsdxAction = new Action('exportVsdx', function()
-		{
-			var noPages = editorUi.pages == null || editorUi.pages.length <= 1;
-			
-			if (noPages)
-			{
-				editorUi.exportVisio();
-			}
-			else
-			{
-				var div = document.createElement('div');
-				div.style.whiteSpace = 'nowrap';
-
-				var hd = document.createElement('h3');
-				mxUtils.write(hd, mxResources.get('formatVsdx'));
-				div.appendChild(hd);
-
-				var section = document.createElement('div');
-				section.className = 'geDialogSection';
-
-				var pages = editorUi.addCheckbox(section, mxResources.get('allPages'), !noPages, noPages);
-
-				div.appendChild(section);
-
-				var dlg = new CustomDialog(editorUi, div, mxUtils.bind(this, function()
-				{
-					editorUi.exportVisio(!pages.checked);
-				}), null, mxResources.get('export'));
-
-				editorUi.showDialog(dlg.container, 300, 146, true, true);
-			}
-		});
-
-		exportVsdxAction.getTitle = function()
-		{
-			return mxResources.get('formatVsdx') + ' (beta)...';
-		};
-
-		editorUi.actions.put('exportVsdx', exportVsdxAction);
-
 		// The admin console of the user's organization (admin.html), in a new tab
 		editorUi.actions.addAction('organizationAdmin...', function()
 		{
@@ -3362,37 +3316,12 @@
 				{
 					this.addMenuItems(menu, ['exportWebp'], parent);
 				}
-			}
-			
-			// Disabled for standalone mode in iOS because new tab cannot be closed
-			else if (editorUi.isRemoteExportEnabled() && (!mxClient.IS_IOS || !navigator.standalone))
-			{
-				this.addMenuItems(menu, ['exportPng', 'exportJpg'], parent);
-			}
 
-			if (editorUi.editor.isExportToCanvas())
-			{
 				this.addMenuItems(menu, ['exportAnimatedGif'], parent);
 			}
 
-			this.addMenuItems(menu, ['exportSvg', '-'], parent);
-			
-			// Redirects export to PDF to print if no export service is available
-			if (editorUi.isPrintPdfExport())
-			{
-				this.addMenuItems(menu, ['exportPdf'], parent);
-			}
-			// Disabled for standalone mode in iOS because new tab cannot be closed
-			else if (!mxClient.IS_IOS || !navigator.standalone)
-			{
-				this.addMenuItems(menu, ['exportPdf'], parent);
-			}
-
-			if (editorUi.vsdxExportEnabled() &&
-				(typeof(VsdxExport) !== 'undefined' || !editorUi.isOffline()))
-			{
-				this.addMenuItems(menu, ['exportVsdx'], parent);
-			}
+			// PDF uses the browser print dialog (see exportPdf)
+			this.addMenuItems(menu, ['exportSvg', '-', 'exportPdf'], parent);
 
 			var exportItems = ['-', 'exportHtml', 'exportXml'];
 

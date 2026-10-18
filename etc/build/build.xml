@@ -99,9 +99,8 @@ OUTPUT FILES (in src/main/webapp/js/):
 	============================================================================
 	Builds extensions.min.js (VSDX import, Mermaid, GraphML, OrgChart). Runs
 	before app, which depends on it, and on its own from github-deploy.xml,
-	which rebuilds the public extensions.min.js from the staged sources (the
-	internal build appends VSDX export to this bundle, see extensions-full in
-	build.xml).
+	which rebuilds the public extensions.min.js from the staged sources. VSDX
+	export is not part of this fork (see docs/CHANGES.md, CHG-001).
 
 	OUTPUTS:
 	  - js/extensions.min.js    : Import/export extensions

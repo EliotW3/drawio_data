@@ -1468,7 +1468,6 @@ App.main = function(callback, createUi)
 						if (urlParams['chrome'] != '0' && urlParams['test'] == '1')
 						{
 							EditorUi.debug('App.start', ['v' + EditorUi.VERSION, ui, (new Date().getTime() - t0.getTime()) + 'ms']);
-							EditorUi.debug('Export:', EXPORT_URL);
 						}
 					}
 					catch (e)

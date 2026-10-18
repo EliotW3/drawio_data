@@ -414,7 +414,6 @@ formatPdf=PDF
 formatSql=‫إس كيو إل‬
 formatSvg=SVG
 formatHtmlEmbedded=HTML
-formatVsdx=‫في إس دي إكس‬
 formatWebp=‫ويب بي‬
 formatXml=‫إكس إم إل‬
 forum=‫المناقشات/ منتديات المساعدة‬

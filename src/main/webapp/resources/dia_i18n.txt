@@ -423,7 +423,6 @@ formatPdf=formatPdf
 formatSql=formatSql
 formatSvg=formatSvg
 formatHtmlEmbedded=formatHtmlEmbedded
-formatVsdx=formatVsdx
 formatWebp=formatWebp
 formatXml=formatXml
 forum=forum

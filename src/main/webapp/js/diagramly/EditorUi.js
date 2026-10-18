@@ -1033,12 +1033,6 @@
 	EditorUi.prototype.currentFile = null;
 
 	/**
-	 * Forces PDF export via the print dialog. Default is false, which uses
-	 * the export service if one is available (see isPrintPdfExport).
-	 */
-	EditorUi.prototype.printPdfExport = false;
-	
-	/**
 	 * Specifies if PDF export with pages is enabled.
 	 */
 	EditorUi.prototype.pdfPageExport = true;
@@ -1541,28 +1535,6 @@
 		// ignored in the desktop app where all resources are local
 		return this.isOfflineApp() || (!navigator.onLine && !EditorUi.isElectronApp) ||
 			(!ignoreStealth && (urlParams['stealth'] == '1' || urlParams['lockdown'] == '1'));
-	};
-
-	/**
-	 * Returns true if a server-side export service is configured and the app
-	 * is not offline. EXPORT_URL must be an absolute HTTP(S) or root-relative
-	 * URL. Null, empty and other values (such as the placeholder in the
-	 * PreConfig.js of the public build) mean that no service is available.
-	 */
-	EditorUi.prototype.isRemoteExportEnabled = function()
-	{
-		return !this.isOffline() && typeof EXPORT_URL === 'string' &&
-			/^(https?:\/\/|\/)/i.test(EXPORT_URL);
-	};
-
-	/**
-	 * Returns true if PDF export should use the print dialog instead of the
-	 * export service. This is the case if printPdfExport is set or if no
-	 * export service is available.
-	 */
-	EditorUi.prototype.isPrintPdfExport = function()
-	{
-		return this.printPdfExport || !this.isRemoteExportEnabled();
 	};
 
 	/**
@@ -3664,40 +3636,13 @@
 				{
 					filename = basename + '.jpg';
 				}
-				
-				if (urlParams['embed'] == '1' && urlParams['proto'] == 'json' && this.embedExportProtocol)
+
+				// Rendered formats (PDF) are only created by the local export pipeline
+				// of the desktop app, which defines createDownloadRequest (see
+				// ElectronApp.js). There is no server-side export in the web app.
+				if (typeof this.createDownloadRequest !== 'function')
 				{
-					var parent = this.embedMessageSource || window.opener || window.parent;
-
-					if (this.spinner.spin(document.body, mxResources.get('exporting')))
-					{
-						var req = this.createDownloadRequest(filename, format, ignoreSelection, '1',
-							transparent, currentPage, scale, border, grid, includeXml, pageRange, w, h,
-							!pageVisible, margin, fit, sheetsAcross, sheetsDown, shadows, icons);
-
-						req.send(mxUtils.bind(this, function(req)
-						{
-							this.spinner.stop();
-
-							if (req.getStatus() >= 200 && req.getStatus() <= 299)
-							{
-								var msg = this.createLoadMessage('export');
-								msg.format = format;
-								msg.filename = filename;
-								msg.data = 'data:application/pdf;base64,' + req.getText();
-								msg.xml = this.getFileData(true);
-								parent.postMessage(JSON.stringify(msg), '*');
-							}
-							else
-							{
-								this.handleError({message: mxResources.get('errorSavingFile')});
-							}
-						}), mxUtils.bind(this, function()
-						{
-							this.spinner.stop();
-							this.handleError({message: mxResources.get('errorSavingFile')});
-						}));
-					}
+					this.handleError({message: mxResources.get('notAvailable')});
 				}
 				else
 				{
@@ -3725,29 +3670,6 @@
 		}
 	};
 	
-	// Note: Remember to adjust ElectronApp override when this function is modified
-	EditorUi.prototype.createDownloadRequest = function(filename, format, ignoreSelection, base64,
-		transparent, currentPage, scale, border, grid, includeXml, pageRange, w, h, crop, margin,
-		fit, sheetsAcross, sheetsDown, shadows, icons)
-	{
-		var params = this.downloadRequestBuilder(filename, format, ignoreSelection, base64,
-			transparent, currentPage, scale, border, grid, includeXml, pageRange, w, h, crop,
-			margin, fit, sheetsAcross, sheetsDown, shadows, icons);
-		var paramsStr = '';
-
-		for (var p in params)
-		{
-			var val = params[p];
-
-			if (val != null)
-			{
-				paramsStr += p + '=' + encodeURIComponent(val) + '&';
-			}
-		}
-
-		return new mxXmlRequest(EXPORT_URL, paramsStr);
-	};
-
 	/**
 	 * Returns the parameters of the export request for the given filename,
 	 * format and export options with the data of the current file, page or
@@ -7982,7 +7904,7 @@
 	{
 		allowBrowser = (allowBrowser != null) ? allowBrowser : false;
 		// Binary files other than images cannot be shown in a new window
-		allowTab = (allowTab != null) ? allowTab : (format != 'vsdx') && (format != 'mp4') &&
+		allowTab = (allowTab != null) ? allowTab : (format != 'mp4') &&
 			(!mxClient.IS_IOS || !navigator.standalone);
 
 		var saveFunction = mxUtils.bind(this, function(newTitle, mode, input, folderId)
@@ -10374,98 +10296,6 @@
 	};
 
 	/**
-	 * 
-	 */
-	EditorUi.prototype.showRemoteExportDialog = function(btnLabel, helpLink, callback, hideInclude, showZoomBorder)
-	{
-		var div = document.createElement('div');
-		div.style.whiteSpace = 'nowrap';
-		
-		var hd = document.createElement('h3');
-		mxUtils.write(hd, mxResources.get('image'));
-		div.appendChild(hd);
-
-		if (showZoomBorder)
-		{
-			var dimSection = document.createElement('div');
-			dimSection.className = 'geDialogSection';
-
-			var formRow = document.createElement('div');
-			formRow.className = 'geDialogFormRow';
-			var zoomLbl = document.createElement('span');
-			zoomLbl.className = 'geDialogFormLabel';
-			mxUtils.write(zoomLbl, mxResources.get('zoom') + ':');
-			formRow.appendChild(zoomLbl);
-			var zoomInput = document.createElement('input');
-			zoomInput.setAttribute('type', 'text');
-			zoomInput.value = this.lastExportZoom || '100%';
-			formRow.appendChild(zoomInput);
-			dimSection.appendChild(formRow);
-
-			formRow = document.createElement('div');
-			formRow.className = 'geDialogFormRow';
-			var borderLbl = document.createElement('span');
-			borderLbl.className = 'geDialogFormLabel';
-			mxUtils.write(borderLbl, mxResources.get('borderWidth') + ':');
-			formRow.appendChild(borderLbl);
-			var borderInput = document.createElement('input');
-			borderInput.setAttribute('type', 'text');
-			borderInput.value = this.lastExportBorder || '0';
-			formRow.appendChild(borderInput);
-			dimSection.appendChild(formRow);
-
-			div.appendChild(dimSection);
-		}
-		
-		var optSection = document.createElement('div');
-		optSection.className = 'geDialogSection';
-
-		var selection = this.addCheckbox(optSection, mxResources.get('selectionOnly'),
-			this.lastExportSelectionOnly && !this.editor.graph.isSelectionEmpty(),
-			this.editor.graph.isSelectionEmpty(), null, null, null, null, true);
-		var include = (hideInclude) ? null :
-			this.addCheckbox(optSection, mxResources.get('includeCopyOfMyDiagram'),
-				Editor.defaultIncludeDiagram, null, null, null, null, null, true);
-
-		var graph = this.editor.graph;
-		var defaultTransparent = graph.background == mxConstants.NONE ||
-			graph.background == null;
-		var transparent = (hideInclude) ? null :
-			this.addCheckbox(optSection, mxResources.get('transparentBackground'),
-				(this.lastExportTransparent != null) ?
-				this.lastExportTransparent : defaultTransparent,
-				null, null, null, null, null, true);
-
-		div.appendChild(optSection);
-
-		var dlg = new CustomDialog(this, div, mxUtils.bind(this, function()
-		{
-			this.lastExportSelectionOnly = selection.checked;
-
-			if (showZoomBorder)
-			{
-				this.lastExportZoom = zoomInput.value;
-				this.lastExportBorder = borderInput.value;
-			}
-
-			if (transparent != null)
-			{
-				// Kept only while it differs from the derived default so an
-				// unchanged setting keeps tracking the page background
-				this.lastExportTransparent = (transparent.checked == defaultTransparent) ?
-					null : transparent.checked;
-			}
-
-			var scale = parseInt(zoomInput.value) / 100 || 1;
-			var border = parseInt(borderInput.value) || 0;
-
-			callback(!selection.checked, (include != null) ? include.checked : false,
-				(transparent != null) ? transparent.checked : false, scale, border);
-		}), null, btnLabel, helpLink);
-		this.showDialog(dlg.container, 340, null, true, true);
-	};
-	
-	/**
 	 * Formats of the image export dialog that support named presets.
 	 */
 	EditorUi.exportPresetFormats = ['png', 'svg', 'jpeg', 'webp'];
@@ -11799,48 +11629,10 @@
 		   		err({message: mxResources.get('unknownError')});
 		   	}), null, true, (retina) ? 2 : 1, null, shadow, null, null, Editor.defaultBorder);
 		}
-		else if (!this.isRemoteExportEnabled())
-		{
-			err({message: mxResources.get('notAvailable')});
-		}
 		else
 		{
-			var data = this.getFileData(true);
-			
-			if (bounds.width * bounds.height <= MAX_AREA && data.length <= MAX_REQUEST_SIZE)
-			{
-				var size = '';
-				
-				if (retina)
-				{
-					size = '&w=' + Math.round(2 * bounds.width) +
-						'&h=' + Math.round(2 * bounds.height);
-				}
-				
-				var embed = (lightbox) ? '1' : '0';
-				var req = new mxXmlRequest(EXPORT_URL, 'format=png' +
-					'&base64=1&embedXml=' + embed + size + '&xml=' +
-					encodeURIComponent(data));
-				
-				// LATER: Updates on each change, add a delay
-				req.send(mxUtils.bind(this, function()
-				{
-					if (req.getStatus() >= 200 && req.getStatus() <= 299)
-					{
-						// Fixes possible "incorrect function" for select() on
-						// DOM node which is no longer in document with IE11
-						doUpdate('data:image/png;base64,' + req.getText());
-					}
-					else
-					{
-						err({message: mxResources.get('unknownError')});
-					}
-				}));
-			}
-			else
-			{
-				err({message: mxResources.get('drawingTooLarge')});
-			}
+			// No server-side export: images are only rendered in the browser
+			err({message: mxResources.get('notAvailable')});
 		}
 	};
 	
@@ -13258,79 +13050,6 @@
 		}), handleError);
 	};
 
-	/**
-	 * Export the diagram to VSDX
-	 */
-	EditorUi.prototype.exportVisio = function(currentPage)
-	{
-		if (this.spinner.spin(document.body, mxResources.get('loading')))
-		{
-			var onerror = mxUtils.bind(this, function(e)
-			{
-				this.loadingExtensions = false;
-				this.handleError(e);
-			});
-
-			if (!this.vsdxExportEnabled())
-			{
-				onerror({message: mxResources.get('serviceUnavailableOrBlocked')});
-				return;
-			}
-
-			this.createTimeout(null, mxUtils.bind(this, function(timeout)
-			{
-				var handleError = mxUtils.bind(this, function(e)
-				{
-					if (timeout.clear())
-					{
-						onerror(e);
-					}
-				});
-
-				var delayed = mxUtils.bind(this, function()
-				{
-					this.loadingExtensions = false;
-
-					if (timeout.clear())
-					{
-						if (typeof VsdxExport  !== 'undefined')
-						{
-							try
-							{
-								this.spinner.stop();
-								var expSuccess = new VsdxExport(this).exportCurrentDiagrams(currentPage);
-								
-								if (!expSuccess)
-								{
-									handleError({message: mxResources.get('unknownError')});
-								}
-							}
-							catch (e)
-							{
-								handleError(e);
-							}
-						}
-						else
-						{
-							handleError({message: mxResources.get('serviceUnavailableOrBlocked')});
-						}
-					}
-				});
-				
-				if (typeof VsdxExport === 'undefined' && !this.loadingExtensions && !this.isOffline(true))
-				{
-					this.loadingExtensions = true;
-					mxscript(window.DRAWIO_SERVER_URL + 'js/extensions.min.js', delayed, null, null, null, handleError);
-				}
-				else
-				{
-					// Async needed for showing spinner for longer exports
-					window.setTimeout(delayed, 0);
-				}
-			}), onerror);
-		}
-	};
-	
 	/**
 	 * Imports the given Lucidchart data.
 	 */
@@ -28178,38 +27897,11 @@
 
 									graphReady();
 								}
-								else if (!this.isRemoteExportEnabled())
-								{
-									processUri(null);
-								}
 								else
 								{
-									// Data from server is base64 encoded to avoid binary XHR
-									// Double encoding for XML arg is needed for UTF8 encoding
-							       	var req = new mxXmlRequest(EXPORT_URL, 'format=png&embedXml=' +
-							       		((data.format == 'xmlpng') ? '1' : '0') + 
-							       		(pageId != null? '&pageId=' + encodeURIComponent(pageId) : '') +
-							       		(data.layerIds != null && data.layerIds.length > 0?
-										'&extras=' + encodeURIComponent(JSON.stringify({layerIds: data.layerIds})) : '') +
-							       		(data.scale != null? '&scale=' + data.scale : '') +'&base64=1&xml=' +
-							       		encodeURIComponent(xml));
-	
-									req.send(mxUtils.bind(this, function(req)
-									{
-										// Temp graph was never created at this point so we can
-										// skip processUri since it already contains the XML
-										if (req.getStatus() >= 200 && req.getStatus() <= 299)
-										{
-											postDataBack('data:image/png;base64,' + req.getText());
-										}
-										else
-										{
-											processUri(null);
-										}
-									}), mxUtils.bind(this, function()
-									{
-										processUri(null);
-									}));
+									// No server-side export: replies without data
+									// if the image cannot be rendered in the browser
+									processUri(null);
 								}
 							}
 						}
@@ -31948,33 +31640,10 @@
 								false, false, b, true, false, 'jpeg', grid);
 						}
 					}
-					else if (!editorUi.isRemoteExportEnabled())
+					else
 					{
+						// No server-side export: other formats are not available
 						editorUi.handleError({message: mxResources.get('notAvailable')});
-					}
-					else 
-					{
-						var extras = {globalVars: graph.getExportVariables()};
-						
-						if (grid)
-						{
-							extras.grid = {
-								size: graph.gridSize,
-								steps: graph.view.gridSteps,
-								color: graph.view.gridColor
-							};
-						}
-						
-						editorUi.saveRequest(name, format,
-							function(newTitle, base64)
-							{
-								return new mxXmlRequest(EXPORT_URL, 'format=' + format + '&base64=' + (base64 || '0') +
-									((newTitle != null) ? '&filename=' + encodeURIComponent(newTitle) : '') +
-									'&extras=' + encodeURIComponent(JSON.stringify(extras)) +
-									(dpi > 0? '&dpi=' + dpi : '') +
-									'&bg=' + ((bg != null) ? bg : 'none') + '&w=' + w + '&h=' + h +
-									'&border=' + b + '&xml=' + encodeURIComponent(data));
-							});
 					}
 				}
 				else
@@ -33745,11 +33414,6 @@
 		return 'draw.io';
 	};
 	
-	EditorUi.prototype.vsdxExportEnabled = function()
-	{
-		return this.getServiceName() == 'atlassian';
-	};
-
 	EditorUi.prototype.addRemoteServiceSecurityCheck = function(xhr)
 	{
 		//Using a standard header with specific sequence

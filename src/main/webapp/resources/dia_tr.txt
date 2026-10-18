@@ -424,7 +424,6 @@ formatPdf=PDF
 formatSql=SQL
 formatSvg=SVG
 formatHtmlEmbedded=HTML
-formatVsdx=VSDX
 formatWebp=WebP
 formatXml=XML
 forum=Tartışma/Yardım Forumları

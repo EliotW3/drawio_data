@@ -339,12 +339,7 @@ mxscript(drawDevUrl + 'js/diagramly/P2PCollab.js');
 mxscript(drawDevUrl + 'js/diagramly/DevTools.js');
 mxscript(drawDevUrl + 'js/diagramly/Simple.js');
 
-if (!window.DRAWIO_PUBLIC_BUILD)
-{
-	// VSDX export (with mxVsdxCanvas2D.js below) is not in the public repository
-	mxscript(drawDevUrl + 'js/diagramly/vsdx/VsdxExport.js');
-}
-else
+if (window.DRAWIO_PUBLIC_BUILD)
 {
 	// The public repository ships the stencil bundle without the stencil XML
 	mxscript(drawDevUrl + 'js/stencils.min.js');
@@ -385,11 +380,6 @@ mxscript(drawDevUrl + 'js/diagramly/LibavoidRouting.js');
 
 // Vsdx/vssx support
 mxscript(drawDevUrl + 'js/diagramly/emf/emf-svg.js');
-
-if (!window.DRAWIO_PUBLIC_BUILD)
-{
-	mxscript(drawDevUrl + 'js/diagramly/vsdx/mxVsdxCanvas2D.js');
-}
 
 mxscript(drawDevUrl + 'js/diagramly/vsdx/bmpDecoder.js');
 mxscript(drawDevUrl + 'js/diagramly/vsdx/importer.js');

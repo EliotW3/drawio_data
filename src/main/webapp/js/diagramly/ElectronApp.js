@@ -2916,11 +2916,6 @@ mxStencilRegistry.allowEval = false;
 				          { name: 'PDF Documents', extensions: ['pdf'] }
 				       ];
 				break;
-				case 'vsdx':
-					filters = [
-				          { name: 'VSDX Documents', extensions: ['vsdx'] }
-				       ];
-				break;
 				case 'html':
 					filters = [
 				          { name: 'HTML Documents', extensions: ['html'] }

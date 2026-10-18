@@ -3640,42 +3640,10 @@ ExportDialog.exportFile = function(editorUi, name, format, bg, s, b, dpi, grid)
 	}
     else
     {
-    	var bounds = graph.getGraphBounds();
-    	
-		// New image export
-		var xmlDoc = mxUtils.createXmlDocument();
-		var root = xmlDoc.createElement('output');
-		xmlDoc.appendChild(root);
-		
-	    // Renders graph. Offset will be multiplied with state's scale when painting state.
-		var xmlCanvas = new mxXmlCanvas2D(root);
-		xmlCanvas.translate(Math.floor((b / s - bounds.x) / graph.view.scale),
-			Math.floor((b / s - bounds.y) / graph.view.scale));
-		xmlCanvas.scale(s / graph.view.scale);
-		
-		var imgExport = new mxImageExport()
-	    imgExport.drawState(graph.getView().getState(graph.model.root), xmlCanvas);
-	    
-		// Puts request data together
-		var param = 'xml=' + encodeURIComponent(mxUtils.getXml(root));
-		var w = Math.ceil(bounds.width * s / graph.view.scale + 2 * b);
-		var h = Math.ceil(bounds.height * s / graph.view.scale + 2 * b);
-		
-		// Requests image if request is valid
-		if (param.length <= MAX_REQUEST_SIZE && w * h < MAX_AREA)
-		{
-			editorUi.hideDialog();
-			var req = new mxXmlRequest(EXPORT_URL, 'format=' + format +
-				'&filename=' + encodeURIComponent(name) +
-				'&bg=' + ((bg != null) ? bg : 'none') +
-				'&w=' + w + '&h=' + h + '&' + param +
-				'&dpi=' + dpi);
-			req.simulate(document, '_blank');
-		}
-		else
-		{
-			mxUtils.alert(mxResources.get('drawingTooLarge'));
-		}
+		// No server-side export: raster formats are exported in the browser
+		// by the application layer, which replaces this function (see
+		// ExportDialog.exportFile in diagramly/EditorUi.js)
+		editorUi.handleError({message: mxResources.get('notAvailable')});
 	}
 };
 
